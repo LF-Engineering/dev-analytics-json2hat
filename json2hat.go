@@ -161,6 +161,7 @@ func importAffs(db *sql.DB, users *gitHubUsers) {
 
 	testConnect := os.Getenv("SH_TEST_CONNECT")
 	if testConnect != "" {
+    fmt.Printf("Test mode: connection ok\n")
 		return
 	}
 
