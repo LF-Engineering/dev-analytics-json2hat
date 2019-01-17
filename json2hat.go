@@ -79,7 +79,7 @@ func timeParseAny(dtStr string) time.Time {
 	return time.Now()
 }
 
-func updateProfile(db *sql.DB, uuid string, user *gitHubUser) {
+func updateProfile(db *sql.DB, uuid string, user *gitHubUser, countryCodes map[string]struct{}) {
 	var cols []string
 	var args []interface{}
 	if user.Sex != nil && (*user.Sex == "m" || *user.Sex == "f") {
@@ -95,15 +95,22 @@ func updateProfile(db *sql.DB, uuid string, user *gitHubUser) {
 		args = append(args, int(*user.SexProb*100.0))
 	}
 	if user.CountryID != nil {
-		cols = append(cols, "country_code = ?")
-		args = append(args, strings.ToUpper(*user.CountryID))
+		_, ok := countryCodes[*user.CountryID]
+		if !ok {
+			fmt.Printf("Sorting Hat database has no '%s' country code, skipping country code update\n", *user.CountryID)
+		} else {
+			cols = append(cols, "country_code = ?")
+			args = append(args, strings.ToUpper(*user.CountryID))
+		}
 	}
 	if len(cols) > 0 {
 		query := strings.Join(cols, ", ")
 		query = "update profiles set " + query + " where uuid = ?"
 		args = append(args, uuid)
-		// fmt.Printf("%s\n", query)
 		_, err := db.Exec(query, args...)
+		if err != nil {
+			fmt.Printf("%s %+v\n", query, args)
+		}
 		fatalOnError(err)
 	}
 }
@@ -161,7 +168,7 @@ func importAffs(db *sql.DB, users *gitHubUsers) {
 
 	testConnect := os.Getenv("SH_TEST_CONNECT")
 	if testConnect != "" {
-    fmt.Printf("Test mode: connection ok\n")
+		fmt.Printf("Test mode: connection ok\n")
 		return
 	}
 
@@ -174,6 +181,18 @@ func importAffs(db *sql.DB, users *gitHubUsers) {
 	for rows.Next() {
 		fatalOnError(rows.Scan(&id, &name))
 		oname2id[name] = id
+	}
+	fatalOnError(rows.Err())
+	fatalOnError(rows.Close())
+
+	// Fetch known country codes
+	countryCodes := make(map[string]struct{})
+	rows, err = db.Query("select code from countries")
+	fatalOnError(err)
+	var code string
+	for rows.Next() {
+		fatalOnError(rows.Scan(&code))
+		countryCodes[code] = struct{}{}
 	}
 	fatalOnError(rows.Err())
 	fatalOnError(rows.Close())
@@ -202,7 +221,7 @@ func importAffs(db *sql.DB, users *gitHubUsers) {
 		}
 		if len(uuids) > 0 {
 			for uuid := range uuids {
-				updateProfile(db, uuid, &user)
+				updateProfile(db, uuid, &user, countryCodes)
 			}
 			hits++
 			// Affiliations
