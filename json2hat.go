@@ -180,7 +180,7 @@ func importAffs(db *sql.DB, users *gitHubUsers) {
 	oname2id := make(map[string]int)
 	for rows.Next() {
 		fatalOnError(rows.Scan(&id, &name))
-		oname2id[name] = id
+		oname2id[strings.ToLower(name)] = id
 	}
 	fatalOnError(rows.Err())
 	fatalOnError(rows.Close())
@@ -263,10 +263,11 @@ func importAffs(db *sql.DB, users *gitHubUsers) {
 		if company == "" {
 			continue
 		}
-		id, ok := oname2id[company]
+		lCompany := strings.ToLower(company)
+		id, ok := oname2id[lCompany]
 		if !ok {
 			id = addOrganization(db, company)
-			oname2id[company] = id
+			oname2id[lCompany] = id
 		}
 	}
 
@@ -276,7 +277,8 @@ func importAffs(db *sql.DB, users *gitHubUsers) {
 		if aff.company == "" {
 			continue
 		}
-		companyID, ok := oname2id[aff.company]
+		lCompany := strings.ToLower(aff.company)
+		companyID, ok := oname2id[lCompany]
 		if !ok {
 			fatalf("company not found: " + aff.company)
 		}
