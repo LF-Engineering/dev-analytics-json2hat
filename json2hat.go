@@ -159,6 +159,11 @@ func importAffs(db *sql.DB, users *gitHubUsers) {
 	fatalOnError(rows.Err())
 	fatalOnError(rows.Close())
 
+	testConnect := os.Getenv("SH_TEST_CONNECT")
+	if testConnect != "" {
+		return
+	}
+
 	// Fetch current organizations
 	rows, err = db.Query("select id, name from organizations")
 	fatalOnError(err)
