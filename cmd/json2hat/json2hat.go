@@ -273,7 +273,7 @@ func getConnectString() string {
 		if pass == "" {
 			fatalf("please specify database password via SH_PASS=...")
 		}
-		user := os.Getenv("SH_PASS")
+		user := os.Getenv("SH_USER")
 		if user == "" {
 			user = "shuser"
 		}
@@ -296,6 +296,9 @@ func getConnectString() string {
 		params := os.Getenv("SH_PARAMS")
 		if params == "" {
 			params = "?charset=utf8"
+		}
+		if params == "-" {
+			params = ""
 		}
 		dsn = fmt.Sprintf(
 			"%s:%s@%s(%s:%s)/%s%s",
