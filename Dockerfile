@@ -1,0 +1,9 @@
+FROM golang:1.11 AS builder
+RUN apt update && apt install git ca-certificates
+COPY . $GOPATH/src/json2hat
+WORKDIR $GOPATH/src/json2hat
+RUN go get -d -v
+RUN CGO_ENABLED=0 go build -ldflags '-extldflags "-static" -s -w' -o /go/bin/json2hat
+FROM scratch
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=builder /go/bin/json2hat /usr/bin/json2hat

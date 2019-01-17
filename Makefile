@@ -1,5 +1,5 @@
-GO_BIN_FILES=cmd/json2hat/json2hat.go
-GO_BIN_CMDS=bitergia_deployment/cmd/json2hat
+GO_BIN_FILES=json2hat.go
+GO_BIN_CMDS=json2hat
 GO_ENV=CGO_ENABLED=0
 GO_BUILD=go build -ldflags '-s -w'
 GO_INSTALL=go install -ldflags '-s'
@@ -15,8 +15,8 @@ STRIP=strip
 
 all: check ${BINARIES}
 
-json2hat: cmd/json2hat/json2hat.go
-	 ${GO_ENV} ${GO_BUILD} -o json2hat cmd/json2hat/json2hat.go
+json2hat: json2hat.go
+	 ${GO_ENV} ${GO_BUILD} -o json2hat json2hat.go
 
 fmt: ${GO_BIN_FILES}
 	./for_each_go_file.sh "${GO_FMT}"
