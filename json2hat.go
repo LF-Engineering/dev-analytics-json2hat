@@ -95,7 +95,7 @@ func updateProfile(db *sql.DB, uuid string, user *gitHubUser, countryCodes map[s
 		args = append(args, int(*user.SexProb*100.0))
 	}
 	if user.CountryID != nil {
-		_, ok := countryCodes[*user.CountryID]
+		_, ok := countryCodes[strings.ToLower(*user.CountryID)]
 		if !ok {
 			fmt.Printf("Sorting Hat database has no '%s' country code, skipping country code update\n", *user.CountryID)
 		} else {
@@ -192,7 +192,7 @@ func importAffs(db *sql.DB, users *gitHubUsers) {
 	var code string
 	for rows.Next() {
 		fatalOnError(rows.Scan(&code))
-		countryCodes[code] = struct{}{}
+		countryCodes[strings.ToLower(code)] = struct{}{}
 	}
 	fatalOnError(rows.Err())
 	fatalOnError(rows.Close())
