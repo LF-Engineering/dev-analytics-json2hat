@@ -34,10 +34,10 @@ You can set remote file path via `SH_REMOTE_JSON_PATH=http://some.url.org/path/t
 
 `json2hat` is packaged as a docker image [docker.io/lukaszgryglicki/json2hat](https://cloud.docker.com/u/lukaszgryglicki/repository/docker/lukaszgryglicki/json2hat). You can use scripts from `docker/` directory to manage docker image.
 
-Scripts:
+Scripts (most require setting docker username via something like this: `docker login; DOCKER_USER=your_user_name ./docker/docker_scriptname.sh`):
 
 - `docker/docker_build.sh` - this will build `json2hat` docker image. Image is using multi layer setup to build the smallest possible output. It don't even have `bash`. See `Dockerfile` for details.
 - `docker/docker_run.sh` - this will execute `json2hat` from within the container. You should pass `SH_*` variables to control Sorting Hata database connection and affiliations JSON path.
-- `docker/docker_publish.sh` - use like this: `docker login; DOCKER_USER=your_user_name ./docker/docker_publish.sh`, it will publish `json2hat` image to your docker hub.
+- `docker/docker_publish.sh` - it will publish `json2hat` image to your docker hub.
 - `docker/docker_remove.sh` - removes generated `json2hat` docker image.
 - `docker/docker_cleanup.sh` - removes generated `json2hat` docker image and executes `docker system prune`.
