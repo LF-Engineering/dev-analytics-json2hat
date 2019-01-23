@@ -343,7 +343,7 @@ func getConnectString() string {
 
 // getAffiliationsJSONBody - get affiliations JSON contents
 // First try to get JSON from SH_LOCAL_JSON_PATH which defaults to "github_users.json"
-// Fallback to SH_REMOTE_JSON_PATH which defaults to "https://raw.githubusercontent.com/cncf/gitdm/master/github_users.json"
+// Fallback to SH_REMOTE_JSON_PATH which defaults to "https://raw.githubusercontent.com/cncf/gitdm/master/src/github_users.json"
 func getAffiliationsJSONBody() []byte {
 	jsonLocalPath := os.Getenv("SH_LOCAL_JSON_PATH")
 	if jsonLocalPath == "" {
@@ -355,7 +355,7 @@ func getAffiliationsJSONBody() []byte {
 		case *os.PathError:
 			jsonRemotePath := os.Getenv("SH_REMOTE_JSON_PATH")
 			if jsonRemotePath == "" {
-				jsonRemotePath = "https://raw.githubusercontent.com/cncf/gitdm/master/github_users.json"
+				jsonRemotePath = "https://raw.githubusercontent.com/cncf/gitdm/master/src/github_users.json"
 			}
 			response, err2 := http.Get(jsonRemotePath)
 			fatalOnError(err2)
