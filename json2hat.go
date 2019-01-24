@@ -375,6 +375,7 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions) {
 	hits := 0
 	allAffs := 0
 	updatedProfiles := make(map[string]struct{})
+	notUpdatedProfiles := make(map[string]struct{})
 	for _, user := range *users {
 		// Email decode ! --> @
 		user.Email = strings.ToLower(emailDecode(user.Email))
@@ -395,6 +396,8 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions) {
 				updated := updateProfile(db, uuid, &user, countryCodes)
 				if updated {
 					updatedProfiles[uuid] = struct{}{}
+				} else {
+					notUpdatedProfiles[uuid] = struct{}{}
 				}
 			}
 			hits++
@@ -450,6 +453,7 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions) {
 
 	// Add enrollments
 	updatedEnrollments := make(map[string]struct{})
+	notUpdatedEnrollments := make(map[string]struct{})
 	for _, aff := range affList {
 		uuid := aff.uuid
 		if aff.company == "" {
@@ -463,6 +467,8 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions) {
 		updated := addEnrollment(db, uuid, companyID, aff.from, aff.to)
 		if updated {
 			updatedEnrollments[uuid] = struct{}{}
+		} else {
+			notUpdatedEnrollments[uuid] = struct{}{}
 		}
 	}
 
@@ -474,9 +480,17 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions) {
 	for uuid := range updatedEnrollments {
 		updatedUuids[uuid] = struct{}{}
 	}
+	notUpdatedUuids := make(map[string]struct{})
+	for uuid := range notUpdatedProfiles {
+		notUpdatedUuids[uuid] = struct{}{}
+	}
+	for uuid := range notUpdatedEnrollments {
+		notUpdatedUuids[uuid] = struct{}{}
+	}
 	updates := updateIdentities(db, updatedUuids)
 	fmt.Printf(
-		"Hits: %d, affiliations: %d, companies: %d, updated profiles: %d, updated enrollments: %d, updated uuids: %d, actual updates: %d\n",
+		"Hits: %d, affiliations: %d, companies: %d, updated profiles: %d, updated enrollments: %d, updated uuids: %d, "+
+			"actual updates: %d, not updated profiles: %d, not updated enrollments: %d, not updated uuids: %d\n",
 		hits,
 		allAffs,
 		len(companies),
@@ -484,6 +498,9 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions) {
 		len(updatedEnrollments),
 		len(updatedUuids),
 		updates,
+		len(notUpdatedProfiles),
+		len(notUpdatedEnrollments),
+		len(notUpdatedUuids),
 	)
 	for company, data := range stat {
 		if company == "---" {
