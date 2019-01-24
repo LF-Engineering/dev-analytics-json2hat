@@ -16,10 +16,10 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
-// gitHubUsers - list of GitHub user data from cncf/gitdm.
+// gitHubUsers - list of GitHub user data from cncf/devstats.
 type gitHubUsers []gitHubUser
 
-// gitHubUser - single GitHug user entry from cncf/gitdm `github_users.json` JSON.
+// gitHubUser - single GitHug user entry from cncf/devstats `github_users.json` JSON.
 type gitHubUser struct {
 	Login       string   `json:"login"`
 	Email       string   `json:"email"`
@@ -449,7 +449,7 @@ func getConnectString() string {
 
 // getAffiliationsJSONBody - get affiliations JSON contents
 // First try to get JSON from SH_LOCAL_JSON_PATH which defaults to "github_users.json"
-// Fallback to SH_REMOTE_JSON_PATH which defaults to "https://raw.githubusercontent.com/cncf/gitdm/master/src/github_users.json"
+// Fallback to SH_REMOTE_JSON_PATH which defaults to "https://raw.githubusercontent.com/cncf/devstats/master/github_users.json"
 func getAffiliationsJSONBody() []byte {
 	jsonLocalPath := os.Getenv("SH_LOCAL_JSON_PATH")
 	if jsonLocalPath == "" {
@@ -461,7 +461,7 @@ func getAffiliationsJSONBody() []byte {
 		case *os.PathError:
 			jsonRemotePath := os.Getenv("SH_REMOTE_JSON_PATH")
 			if jsonRemotePath == "" {
-				jsonRemotePath = "https://raw.githubusercontent.com/cncf/gitdm/master/src/github_users.json"
+				jsonRemotePath = "https://raw.githubusercontent.com/cncf/devstats/master/github_users.json"
 			}
 			response, err2 := http.Get(jsonRemotePath)
 			fatalOnError(err2)
