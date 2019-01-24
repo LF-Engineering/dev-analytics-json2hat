@@ -169,7 +169,7 @@ func addOrganization(db *sql.DB, company string) int {
 			}
 			fatalOnError(rows.Err())
 			fatalOnError(rows.Close())
-			fmt.Printf("Warning: name collision: trying to insert '%s, exists: '%s'\n", company, existingName)
+			fmt.Printf("Warning: name collision: trying to insert '%s', exists: '%s'\n", company, existingName)
 		} else {
 			fatalOnError(err)
 		}
