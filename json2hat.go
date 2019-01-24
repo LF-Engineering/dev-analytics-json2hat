@@ -228,6 +228,7 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions) {
 		fatalOnError(err)
 		fmt.Printf("Current affiliation data cleaned.\n")
 	}
+
 	// Fetch existing identities
 	rows, err := db.Query("select uuid, email, username, source from identities")
 	fatalOnError(err)
@@ -350,6 +351,7 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions) {
 		}
 	}
 	// fmt.Printf("affList: %+v\ncompanies: %+v\n", affList, companies)
+	fmt.Printf("oname2id: %+v\ncompanies: %+v\n", oname2id, companies)
 
 	// Add companies
 	for company := range companies {
