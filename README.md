@@ -17,6 +17,8 @@ Sorting Hat database connection parameters:
 - `SH_DB` - database name, defaults to `shdb`.
 - `SH_PARAMS` - additional parameters that can be specified via `?param1=value1&param2=value2&...&paramN=valueN`, defaults to `?charset=utf8`. You can use `SH_PARAMS='-'` to specify empty params.
 
+To cleanup existing company affiliations (delete from `organizations` and `enrollments` tables) set the `SH_CLEANUP` variable.
+
 Testing connection:
 
 - `SH_TEST_CONNECT` - set this variable to only test connection.
@@ -28,7 +30,16 @@ Testing connection:
 
 You can set local file path via `SH_LOCAL_JSON_PATH=/path/to/github_users.json`. Default value is `github_users.json`. If local file is found then no remote file is read.
 
-You can set remote file path via `SH_REMOTE_JSON_PATH=http://some.url.org/path/to/github_users.json`. Default value is `https://raw.githubusercontent.com/cncf/gitdm/master/github_users.json`. This file is only read when reading local json fails. If both local and remote files cannot be read program exists with a fatal error message.
+You can set remote file path via `SH_REMOTE_JSON_PATH=http://some.url.org/path/to/github_users.json`. Default value is `https://raw.githubusercontent.com/cncf/gitdm/master/src/github_users.json`. This file is only read when reading local json fails. If both local and remote files cannot be read program exists with a fatal error message.
+
+
+# Company acquisitions YAML path
+
+`json2hat` needs to read `cncf/devstats` company acquisitions/name mapping yaml file. It first tries to read a local json file and fallbacks to a remote file.
+
+You can set local file path via `SH_LOCAL_YAML_PATH=/path/to/companies.yaml`. Default value is `companies.yaml`. If local file is found then no remote file is read.
+
+You can set remote file path via `SH_REMOTE_YAML_PATH=http://some.url.org/path/to/companies.yaml`. Default value is `https://raw.githubusercontent.com/cncf/devstats/master/companies.yaml`. This file is only read when reading local json fails. If both local and remote files cannot be read program exists with a fatal error message.
 
 # Docker
 
