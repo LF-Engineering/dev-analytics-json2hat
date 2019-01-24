@@ -121,7 +121,7 @@ func mapCompanyName(comMap map[string][2]string, acqMap map[*regexp.Regexp]strin
 	return company
 }
 
-func updateProfile(db *sql.DB, uuid string, user *gitHubUser, countryCodes map[string]struct{}) {
+func updateProfile(db *sql.DB, uuid string, user *gitHubUser, countryCodes map[string]struct{}) bool {
 	var cols []string
 	var args []interface{}
 	if user.Sex != nil && (*user.Sex == "m" || *user.Sex == "f") {
@@ -149,12 +149,16 @@ func updateProfile(db *sql.DB, uuid string, user *gitHubUser, countryCodes map[s
 		query := strings.Join(cols, ", ")
 		query = "update profiles set " + query + " where uuid = ?"
 		args = append(args, uuid)
-		_, err := db.Exec(query, args...)
+		res, err := db.Exec(query, args...)
 		if err != nil {
 			fmt.Printf("%s %+v\n", query, args)
 		}
 		fatalOnError(err)
+		count, err := res.RowsAffected()
+		fatalOnError(err)
+		return count > 0
 	}
+	return false
 }
 
 func addOrganization(db *sql.DB, company string) int {
@@ -185,11 +189,71 @@ func addOrganization(db *sql.DB, company string) int {
 	return id
 }
 
-func addEnrollment(db *sql.DB, uuid string, companyID int, from, to time.Time) {
-	_, err := db.Exec("delete from enrollments where uuid = ? and start = ? and end = ?", uuid, from, to)
+func addEnrollment(db *sql.DB, uuid string, companyID int, from, to time.Time) bool {
+	rows, err := db.Query("select 1 from enrollments where uuid = ? and start = ? and end = ? and organization_id = ?", uuid, from, to, companyID)
+	fatalOnError(err)
+	var dummy int
+	for rows.Next() {
+		fatalOnError(rows.Scan(&dummy))
+	}
+	fatalOnError(rows.Err())
+	fatalOnError(rows.Close())
+	if dummy == 1 {
+		return false
+	}
+	_, err = db.Exec("delete from enrollments where uuid = ? and start = ? and end = ?", uuid, from, to)
 	fatalOnError(err)
 	_, err = db.Exec("insert into enrollments(uuid, start, end, organization_id) values(?, ?, ?, ?)", uuid, from, to, companyID)
 	fatalOnError(err)
+	return true
+}
+
+func updateIdentities(db *sql.DB, uuids map[string]struct{}) int64 {
+	if len(uuids) == 0 {
+		fmt.Printf("No identities to update.\n")
+		return 0
+	}
+	var allUpdated int64
+	n := 0
+	pack := 0
+	packSize := 1000
+	queryRoot := "update identities set last_modified = now() where uuid in("
+	query := queryRoot
+	args := []interface{}{}
+	for uuid := range uuids {
+		query += "?,"
+		args = append(args, uuid)
+		n++
+		if n == packSize {
+			query = query[:len(query)-1] + ")"
+			res, err := db.Exec(query, args...)
+			if err != nil {
+				fmt.Printf("%s %+v\n", query, args)
+			}
+			fatalOnError(err)
+			updated, err := res.RowsAffected()
+			fatalOnError(err)
+			n = 0
+			pack++
+			query = queryRoot
+			args = []interface{}{}
+			allUpdated += updated
+			fmt.Printf("Pack %d updated: %d/%d\n", pack, updated, packSize)
+		}
+	}
+	if n > 0 {
+		query = query[:len(query)-1] + ")"
+		res, err := db.Exec(query, args...)
+		if err != nil {
+			fmt.Printf("%s %+v\n", query, args)
+		}
+		fatalOnError(err)
+		updated, err := res.RowsAffected()
+		fatalOnError(err)
+		allUpdated += updated
+		fmt.Printf("Last Pack updated: %d/%d\n", updated, n)
+	}
+	return allUpdated
 }
 
 func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions) {
@@ -310,6 +374,7 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions) {
 	var affList []affData
 	hits := 0
 	allAffs := 0
+	updatedProfiles := make(map[string]struct{})
 	for _, user := range *users {
 		// Email decode ! --> @
 		user.Email = strings.ToLower(emailDecode(user.Email))
@@ -327,7 +392,10 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions) {
 		}
 		if len(uuids) > 0 {
 			for uuid := range uuids {
-				updateProfile(db, uuid, &user, countryCodes)
+				updated := updateProfile(db, uuid, &user, countryCodes)
+				if updated {
+					updatedProfiles[uuid] = struct{}{}
+				}
 			}
 			hits++
 			// Affiliations
@@ -381,6 +449,7 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions) {
 	}
 
 	// Add enrollments
+	updatedEnrollments := make(map[string]struct{})
 	for _, aff := range affList {
 		uuid := aff.uuid
 		if aff.company == "" {
@@ -391,9 +460,31 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions) {
 		if !ok {
 			fatalf("company not found: " + aff.company)
 		}
-		addEnrollment(db, uuid, companyID, aff.from, aff.to)
+		updated := addEnrollment(db, uuid, companyID, aff.from, aff.to)
+		if updated {
+			updatedEnrollments[uuid] = struct{}{}
+		}
 	}
-	fmt.Printf("Hits: %d, affiliations: %d, companies: %d\n", hits, allAffs, len(companies))
+
+	// Gather uuids updated and update their 'last_modified' date on 'identities' table
+	updatedUuids := make(map[string]struct{})
+	for uuid := range updatedProfiles {
+		updatedUuids[uuid] = struct{}{}
+	}
+	for uuid := range updatedEnrollments {
+		updatedUuids[uuid] = struct{}{}
+	}
+	updates := updateIdentities(db, updatedUuids)
+	fmt.Printf(
+		"Hits: %d, affiliations: %d, companies: %d, updated profiles: %d, updated enrollments: %d, updated uuids: %d, actual updates: %d\n",
+		hits,
+		allAffs,
+		len(companies),
+		len(updatedProfiles),
+		len(updatedEnrollments),
+		len(updatedUuids),
+		updates,
+	)
 	for company, data := range stat {
 		if company == "---" {
 			fmt.Printf("Non-acquired companies: checked all regexp: %d, cache hit: %d\n", data[0], data[1])
