@@ -159,7 +159,21 @@ func updateProfile(db *sql.DB, uuid string, user *gitHubUser, countryCodes map[s
 
 func addOrganization(db *sql.DB, company string) int {
 	_, err := db.Exec("insert into organizations(name) values(?)", company)
-	fatalOnError(err)
+	if err != nil {
+		if strings.Contains(err.Error(), "Error 1062") {
+			rows, err2 := db.Query("select name from organizations where name = ?", company)
+			fatalOnError(err2)
+			var existingName string
+			for rows.Next() {
+				fatalOnError(rows.Scan(&existingName))
+			}
+			fatalOnError(rows.Err())
+			fatalOnError(rows.Close())
+			fmt.Printf("Warning: name collision: trying to insert '%s, exists: '%s'\n", company, existingName)
+		} else {
+			fatalOnError(err)
+		}
+	}
 	rows, err := db.Query("select id from organizations where name = ?", company)
 	fatalOnError(err)
 	var id int
@@ -180,7 +194,7 @@ func addEnrollment(db *sql.DB, uuid string, companyID int, from, to time.Time) {
 
 func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions) {
 	// Process acquisitions
-	fmt.Printf("Acquisitions: %+v\n", acqs)
+	fmt.Printf("Acquisitions: %+v\n", acqs.Acquisitions)
 	var (
 		acqMap map[*regexp.Regexp]string
 		comMap map[string][2]string
@@ -351,7 +365,7 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions) {
 		}
 	}
 	// fmt.Printf("affList: %+v\ncompanies: %+v\n", affList, companies)
-	fmt.Printf("oname2id: %+v\ncompanies: %+v\n", oname2id, companies)
+	// fmt.Printf("oname2id: %+v\ncompanies: %+v\n", oname2id, companies)
 
 	// Add companies
 	for company := range companies {
