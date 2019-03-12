@@ -48,7 +48,7 @@ You can set remote file path via `SH_REMOTE_YAML_PATH=http://some.url.org/path/t
 Scripts (most require setting docker username via something like this: `docker login; DOCKER_USER=your_user_name ./docker/docker_scriptname.sh`):
 
 - `docker/docker_build.sh` - this will build `json2hat` docker image. Image is using multi layer setup to build the smallest possible output. It don't even have `bash`. See `Dockerfile` for details. Image is only about 6Mb size.
-- `docker/docker_run.sh` - this will execute `json2hat` from within the container. You should pass `SH_*` variables to control Sorting Hata database connection and affiliations JSON path.
+- `docker/docker_run.sh` - this will execute `json2hat` from within the container. You should pass `SH_*` variables to control Sorting Hat database connection and affiliations JSON path.
 - `docker/docker_publish.sh` - it will publish `json2hat` image to your docker hub.
 - `docker/docker_pull.sh` - it will pull `json2hat` image from your docker hub.
 - `docker/docker_remove.sh` - removes generated `json2hat` docker image.
