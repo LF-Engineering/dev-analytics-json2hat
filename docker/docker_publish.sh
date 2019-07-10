@@ -6,3 +6,5 @@ then
 fi
 docker tag json2hat "${DOCKER_USER}/json2hat"
 docker push "${DOCKER_USER}/json2hat"
+docker tag json2hat-debug "${DOCKER_USER}/json2hat-debug"
+docker push "${DOCKER_USER}/json2hat-debug"

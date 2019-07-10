@@ -5,3 +5,4 @@ then
   exit 1
 fi
 docker pull "${DOCKER_USER}/json2hat"
+docker pull "${DOCKER_USER}/json2hat-debug"
