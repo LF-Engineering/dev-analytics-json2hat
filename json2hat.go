@@ -515,6 +515,7 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions) {
 		}
 		fmt.Printf("Used mapping '%s' --> '%s'\n", company, data[0])
 	}
+	fmt.Printf("All finished OK\n")
 }
 
 // getConnectString - get MariaDB SH (Sorting Hat) database DSN
