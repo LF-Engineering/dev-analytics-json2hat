@@ -574,7 +574,7 @@ func getConnectString() string {
 
 // getAffiliationsJSONBody - get affiliations JSON contents
 // First try to get JSON from SH_LOCAL_JSON_PATH which defaults to "github_users.json"
-// Fallback to SH_REMOTE_JSON_PATH which defaults to "https://raw.githubusercontent.com/cncf/devstats/master/github_users.json"
+// Fallback to SH_REMOTE_JSON_PATH which defaults to "https://github.com/cncf/devstats/raw/master/github_users.json"
 func getAffiliationsJSONBody() []byte {
 	jsonLocalPath := os.Getenv("SH_LOCAL_JSON_PATH")
 	if jsonLocalPath == "" {
@@ -586,7 +586,7 @@ func getAffiliationsJSONBody() []byte {
 		case *os.PathError:
 			jsonRemotePath := os.Getenv("SH_REMOTE_JSON_PATH")
 			if jsonRemotePath == "" {
-				jsonRemotePath = "https://raw.githubusercontent.com/cncf/devstats/master/github_users.json"
+				jsonRemotePath = "https://github.com/cncf/devstats/raw/master/github_users.json"
 			}
 			response, err2 := http.Get(jsonRemotePath)
 			fatalOnError(err2)
@@ -605,7 +605,7 @@ func getAffiliationsJSONBody() []byte {
 
 // getAcquisitionsYAMLBody - get company acquisitions and name mappings YAML body
 // First try to get YAML from SH_LOCAL_YAML_PATH which defaults to "companies.yaml"
-// Fallback to SH_REMOTE_YAML_PATH which defaults to "https://raw.githubusercontent.com/cncf/devstats/master/companies.yaml"
+// Fallback to SH_REMOTE_YAML_PATH which defaults to "https://github.com/cncf/devstats/raw/master/companies.yaml"
 func getAcquisitionsYAMLBody() []byte {
 	yamlLocalPath := os.Getenv("SH_LOCAL_YAML_PATH")
 	if yamlLocalPath == "" {
@@ -617,7 +617,7 @@ func getAcquisitionsYAMLBody() []byte {
 		case *os.PathError:
 			yamlRemotePath := os.Getenv("SH_REMOTE_YAML_PATH")
 			if yamlRemotePath == "" {
-				yamlRemotePath = "https://raw.githubusercontent.com/cncf/devstats/master/companies.yaml"
+				yamlRemotePath = "https://github.com/cncf/devstats/raw/master/companies.yaml"
 			}
 			response, err2 := http.Get(yamlRemotePath)
 			fatalOnError(err2)
