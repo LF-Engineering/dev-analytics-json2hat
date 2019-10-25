@@ -403,7 +403,7 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions) {
 			hits++
 			// Affiliations
 			affs := user.Affiliation
-			if affs == "NotFound" || affs == "(Unknown)" || affs == "?" || affs == "" {
+			if affs == "NotFound" || affs == "(Unknown)" || affs == "?" || affs == "-" || affs == "" {
 				continue
 			}
 			affsAry := strings.Split(affs, ", ")
