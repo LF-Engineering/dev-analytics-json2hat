@@ -1,5 +1,5 @@
 FROM golang:1.13 AS builder
-RUN apt update && apt install git ca-certificates
+RUN apt update && apt install -y git ca-certificates
 COPY . $GOPATH/src/json2hat
 WORKDIR $GOPATH/src/json2hat
 RUN go get -d -v
