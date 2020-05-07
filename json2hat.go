@@ -12,9 +12,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/LF-Engineering/ssaw/ssawsync"
 	_ "github.com/go-sql-driver/mysql"
 	yaml "gopkg.in/yaml.v2"
 )
+
+const cOrigin = "json2hat"
 
 // gitHubUsers - list of GitHub user data from cncf/devstats.
 type gitHubUsers []gitHubUser
@@ -640,7 +643,7 @@ func main() {
 	db, err := sql.Open("mysql", dsn)
 	fatalOnError(err)
 	defer func() { fatalOnError(db.Close()) }()
-	_, err = db.Exec("set @origin = ?", "json2hat")
+	_, err = db.Exec("set @origin = ?", cOrigin)
 	fatalOnError(err)
 
 	// Parse github_users.json
@@ -655,6 +658,13 @@ func main() {
 	data = getAcquisitionsYAMLBody()
 	fatalOnError(yaml.Unmarshal(data, &acqs))
 
+	// Trigger sync event
+	defer func() {
+		e := ssawsync.Sync(cOrigin)
+		if e != nil {
+			fmt.Printf("ssaw sync error: %v\n", e)
+		}
+	}()
 	// Import affiliations
 	importAffs(db, &users, &acqs)
 }
