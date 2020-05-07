@@ -640,6 +640,8 @@ func main() {
 	db, err := sql.Open("mysql", dsn)
 	fatalOnError(err)
 	defer func() { fatalOnError(db.Close()) }()
+	_, err = db.Exec("set @origin = ?", "json2hat")
+	fatalOnError(err)
 
 	// Parse github_users.json
 	var users gitHubUsers
