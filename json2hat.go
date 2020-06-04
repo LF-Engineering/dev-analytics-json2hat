@@ -193,7 +193,7 @@ func addOrganization(db *sql.DB, company string) int {
 }
 
 func addEnrollment(db *sql.DB, uuid string, companyID int, from, to time.Time) bool {
-	rows, err := db.Query("select 1 from enrollments where uuid = ? and start = ? and end = ? and organization_id = ?", uuid, from, to, companyID)
+	rows, err := db.Query("select 1 from enrollments where uuid = ? and start = ? and end = ? and organization_id = ? and project_slug is null", uuid, from, to, companyID)
 	fatalOnError(err)
 	var dummy int
 	for rows.Next() {
@@ -204,9 +204,9 @@ func addEnrollment(db *sql.DB, uuid string, companyID int, from, to time.Time) b
 	if dummy == 1 {
 		return false
 	}
-	_, err = db.Exec("delete from enrollments where uuid = ? and start = ? and end = ?", uuid, from, to)
+	_, err = db.Exec("delete from enrollments where uuid = ? and start = ? and end = ? and project_slug is null", uuid, from, to)
 	fatalOnError(err)
-	_, err = db.Exec("insert into enrollments(uuid, start, end, organization_id) values(?, ?, ?, ?)", uuid, from, to, companyID)
+	_, err = db.Exec("insert into enrollments(uuid, start, end, organization_id, project_slug) values(?, ?, ?, ?, null)", uuid, from, to, companyID)
 	fatalOnError(err)
 	return true
 }
@@ -303,7 +303,7 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions) {
 
 	// Eventually clean affiliations data
 	if os.Getenv("SH_CLEANUP") != "" {
-		_, err := db.Exec("delete from enrollments")
+		_, err := db.Exec("delete from enrollments where project_slug is null")
 		fatalOnError(err)
 		_, err = db.Exec("delete from organizations")
 		fatalOnError(err)
