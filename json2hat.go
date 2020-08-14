@@ -455,7 +455,20 @@ func updateBots(db *sql.DB) {
 	fatalOnError(err)
 	count, err := res.RowsAffected()
 	fatalOnError(err)
-	fmt.Printf("Set %d profiles as bots\n", count)
+	fmt.Printf("Set %d profiles as bots (using identity username)\n", count)
+	query = "update profiles set is_bot = 1 where name in (" +
+		"'envoy-filter-example(CircleCI)', 'envoy-docs(travis)', 'data-plane-api(CircleCI)', " +
+		"'go-control-plane(CircleCI)', 'Kubernetes Publisher')"
+	res, err = db.Exec(query)
+	if err != nil {
+		fmt.Printf("%s\n", query)
+	}
+	fatalOnError(err)
+	count, err = res.RowsAffected()
+	fatalOnError(err)
+	fmt.Printf("Set %d profiles as bots (using profile name)\n", count)
+	// select p.uuid, p.name, p.email, p.is_bot, i.name, i.email, i.username, i.source
+	// from identities i, profiles p where i.uuid = p.uuid and i.uuid in (select uuid from profiles where name in (...));
 }
 
 func addOrganization(db *sql.DB, company string) int {
