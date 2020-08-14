@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"math"
 	"net/http"
 	"os"
 	"os/exec"
@@ -147,7 +146,11 @@ func getUUIDsProjects(es string, slugs []string, uuids map[string]struct{}) (m m
 	}
 	thrN := runtime.NumCPU()
 	runtime.GOMAXPROCS(thrN)
-	thrN = int(math.Round(math.Sqrt(float64(thrN))))
+	//thrN = int(math.Round(math.Sqrt(float64(thrN))))
+	thrN /= 4
+	if thrN < 1 {
+		thrN = 1
+	}
 	uuidsConds := []string{}
 	nUUIDs := len(uuids)
 	nConds := nUUIDs / termsSize
@@ -533,6 +536,10 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, esURL str
 		comMap map[string][2]string
 		stat   map[string][2]int
 	)
+	onlyGithub := false
+	if os.Getenv("ONLY_GITHUB") != "" {
+		onlyGithub = true
+	}
 	var re *regexp.Regexp
 	acqMap = make(map[*regexp.Regexp]string)
 	comMap = make(map[string][2]string)
@@ -598,7 +605,7 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, esURL str
 			username = *pusername
 		}
 		email2uuid[email] = uuid
-		if source == "git" || source == "github" {
+		if !onlyGithub || source == "git" || source == "github" {
 			username2uuid[username] = uuid
 		}
 	}
