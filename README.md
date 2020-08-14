@@ -43,7 +43,7 @@ You can set remote file path via `SH_REMOTE_YAML_PATH=http://some.url.org/path/t
 
 # Docker
 
-`json2hat` is packaged as a docker image [docker.io/lukaszgryglicki/json2hat](https://cloud.docker.com/u/lukaszgryglicki/repository/docker/lukaszgryglicki/json2hat). You can use scripts from `docker/` directory to manage docker image.
+`json2hat` is packaged as a docker image [docker.io/dajohn/json2hat](https://cloud.docker.com/u/dajohn/repository/docker/dajohn/json2hat). You can use scripts from `docker/` directory to manage docker image.
 
 Scripts (most require setting docker username via something like this: `docker login; DOCKER_USER=your_user_name ./docker/docker_scriptname.sh`):
 
