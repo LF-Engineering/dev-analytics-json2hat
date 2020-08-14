@@ -18,3 +18,4 @@
 /json2hat
 
 out
+*.secret

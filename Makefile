@@ -1,7 +1,12 @@
 GO_BIN_FILES=json2hat.go
 GO_BIN_CMDS=json2hat
+# race
+# GO_ENV=CGO_ENABLED=1
+# GO_BUILD=go build -ldflags '-s -w' -race
+# no race
 GO_ENV=CGO_ENABLED=0
 GO_BUILD=go build -ldflags '-s -w'
+# end
 GO_INSTALL=go install -ldflags '-s'
 GO_FMT=gofmt -s -w
 GO_LINT=golint -set_exit_status

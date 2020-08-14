@@ -53,3 +53,7 @@ Scripts (most require setting docker username via something like this: `docker l
 - `docker/docker_pull.sh` - it will pull `json2hat` image from your docker hub.
 - `docker/docker_remove.sh` - removes generated `json2hat` docker image.
 - `docker/docker_cleanup.sh` - removes generated `json2hat` docker image and executes `docker system prune`.
+
+# Running locally:
+
+- Replace env with `prod` or `test` or `local`: `./json2hat.sh env`.

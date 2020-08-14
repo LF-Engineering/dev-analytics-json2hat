@@ -1,23 +1,40 @@
 package main
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"net/http"
 	"os"
+	"os/exec"
 	"regexp"
+	"runtime"
 	"runtime/debug"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/LF-Engineering/dev-analytics-metrics/errs"
 	"github.com/LF-Engineering/ssaw/ssawsync"
 	_ "github.com/go-sql-driver/mysql"
 	yaml "gopkg.in/yaml.v2"
 )
 
 const cOrigin = "json2hat"
+
+// Native - keeps fixture slug
+type native struct {
+	Slug string `yaml:"slug"`
+}
+
+// fixtureData - we only need to parse CNCF project slug
+type fixtureData struct {
+	Native native `yaml:"native"`
+}
 
 // gitHubUsers - list of GitHub user data from cncf/devstats.
 type gitHubUsers []gitHubUser
@@ -87,6 +104,249 @@ func timeParseAny(dtStr string) time.Time {
 	}
 	fatalf("Error:\nCannot parse date: '%v'\n", dtStr)
 	return time.Now()
+}
+
+func jsonEscape(str string) string {
+	b, _ := json.Marshal(str)
+	return string(b[1 : len(b)-1])
+}
+
+func execCommand(cmdAndArgs []string, env map[string]string) (string, string) {
+	command := cmdAndArgs[0]
+	arguments := cmdAndArgs[1:]
+	//fmt.Printf("%s %+v\n", command, arguments)
+	cmd := exec.Command(command, arguments...)
+	if len(env) > 0 {
+		newEnv := os.Environ()
+		for key, value := range env {
+			newEnv = append(newEnv, key+"="+value)
+		}
+		cmd.Env = newEnv
+	}
+	var (
+		stdOut bytes.Buffer
+		stdErr bytes.Buffer
+	)
+	cmd.Stderr = &stdErr
+	cmd.Stdout = &stdOut
+	fatalOnError(cmd.Start())
+	fatalOnError(cmd.Wait())
+	return stdOut.String(), stdErr.String()
+}
+
+func getUUIDsProjects(es string, slugs []string, uuids map[string]struct{}) (m map[string]map[string]struct{}) {
+	m = make(map[string]map[string]struct{})
+	fetchSize := 20000
+	termsSize := 0xffff
+	slug2pattern := make(map[string]string)
+	pattern2slug := make(map[string]string)
+	for _, slug := range slugs {
+		pattern := "sds-" + strings.Replace(slug, "/", "-", -1) + "-git*,-*-for-merge,-*-raw"
+		slug2pattern[slug] = pattern
+		pattern2slug[pattern] = slug
+	}
+	thrN := runtime.NumCPU()
+	runtime.GOMAXPROCS(thrN)
+	thrN = int(math.Round(math.Sqrt(float64(thrN))))
+	uuidsConds := []string{}
+	nUUIDs := len(uuids)
+	nConds := nUUIDs / termsSize
+	if nUUIDs%termsSize != 0 {
+		nConds++
+	}
+	uuidsAry := []string{}
+	for uuid := range uuids {
+		uuidsAry = append(uuidsAry, uuid)
+	}
+	for i := 0; i < nConds; i++ {
+		uuidsCond := "author_uuid in ("
+		from := i * termsSize
+		to := from + termsSize
+		if to > nUUIDs {
+			to = nUUIDs
+		}
+		for j := from; j < to; j++ {
+			uuidsCond += "'" + uuidsAry[j] + "',"
+		}
+		uuidsCond = uuidsCond[0:len(uuidsCond)-1] + ")"
+		uuidsConds = append(uuidsConds, uuidsCond)
+	}
+	fmt.Printf("UUIDs processing in %d packs\n", len(uuidsConds))
+	var mMtx *sync.Mutex
+	if thrN > 1 {
+		mMtx = &sync.Mutex{}
+	}
+	processSlug := func(ch chan error, es, slug, pattern, cond string) (err error) {
+		if ch != nil {
+			defer func() {
+				if err != nil {
+					err = errs.Wrap(err, "processSlug: "+slug)
+				}
+				ch <- err
+			}()
+		}
+		// fmt.Printf("Processing: %s <--> %s\n", slug, pattern)
+		data := fmt.Sprintf(
+			`{"query":"select author_uuid from \"%s\" where author_uuid is not null and author_uuid != '' and `+cond+` group by author_uuid","fetch_size":%d}`,
+			jsonEscape(pattern),
+			fetchSize,
+		)
+		payloadBytes := []byte(data)
+		payloadBody := bytes.NewReader(payloadBytes)
+		method := "POST"
+		url := fmt.Sprintf("%s/_sql?format=json", es)
+		var req *http.Request
+		req, err = http.NewRequest(method, url, payloadBody)
+		if err != nil {
+			err = fmt.Errorf("new request error: %+v for %s url: %s, data: %s\n", err, method, url, data)
+			return
+		}
+		req.Header.Set("Content-Type", "application/json")
+		var resp *http.Response
+		resp, err = http.DefaultClient.Do(req)
+		if err != nil {
+			err = fmt.Errorf("do request error: %+v for %s url: %s, data: %s\n", err, method, url, data)
+			return
+		}
+		var body []byte
+		body, err = ioutil.ReadAll(resp.Body)
+		if err != nil {
+			err = fmt.Errorf("ReadAll non-ok request error: %+v for %s url: %s, data: %s\n", err, method, url, data)
+			return
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != 200 {
+			err = fmt.Errorf("Method:%s url:%s data: %s status:%d\n%s\n", method, url, data, resp.StatusCode, body)
+			return
+		}
+		type uuidsResult struct {
+			Cursor string     `json:"cursor"`
+			Rows   [][]string `json:"rows"`
+		}
+		var result uuidsResult
+		err = json.Unmarshal(body, &result)
+		if err != nil {
+			err = fmt.Errorf("Unmarshal error: %+v", err)
+			return
+		}
+		slugUUIDs := []string{}
+		for _, row := range result.Rows {
+			slugUUIDs = append(slugUUIDs, row[0])
+		}
+		if len(result.Rows) == 0 {
+			return
+		}
+		for {
+			data = `{"cursor":"` + result.Cursor + `"}`
+			payloadBytes = []byte(data)
+			payloadBody = bytes.NewReader(payloadBytes)
+			req, err = http.NewRequest(method, url, payloadBody)
+			if err != nil {
+				err = fmt.Errorf("new request error: %+v for %s url: %s, data: %s\n", err, method, url, data)
+				return
+			}
+			req.Header.Set("Content-Type", "application/json")
+			resp, err = http.DefaultClient.Do(req)
+			if err != nil {
+				err = fmt.Errorf("do request error: %+v for %s url: %s, data: %s\n", err, method, url, data)
+				return
+			}
+			body, err = ioutil.ReadAll(resp.Body)
+			if err != nil {
+				err = fmt.Errorf("ReadAll non-ok request error: %+v for %s url: %s, data: %s\n", err, method, url, data)
+				return
+			}
+			_ = resp.Body.Close()
+			if resp.StatusCode != 200 {
+				err = fmt.Errorf("Method:%s url:%s data: %s status:%d\n%s\n", method, url, data, resp.StatusCode, body)
+				return
+			}
+			err = json.Unmarshal(body, &result)
+			if err != nil {
+				err = fmt.Errorf("Unmarshal error: %+v", err)
+				return
+			}
+			if len(result.Rows) == 0 {
+				break
+			}
+			for _, row := range result.Rows {
+				slugUUIDs = append(slugUUIDs, row[0])
+			}
+		}
+		url = fmt.Sprintf("%s/_sql/close", es)
+		data = `{"cursor":"` + result.Cursor + `"}`
+		payloadBytes = []byte(data)
+		payloadBody = bytes.NewReader(payloadBytes)
+		req, err = http.NewRequest(method, url, payloadBody)
+		if err != nil {
+			err = fmt.Errorf("new request error: %+v for %s url: %s, data: %s\n", err, method, url, data)
+			return
+		}
+		req.Header.Set("Content-Type", "application/json")
+		resp, err = http.DefaultClient.Do(req)
+		if err != nil {
+			err = fmt.Errorf("do request error: %+v for %s url: %s, data: %s\n", err, method, url, data)
+			return
+		}
+		body, err = ioutil.ReadAll(resp.Body)
+		if err != nil {
+			err = fmt.Errorf("ReadAll non-ok request error: %+v for %s url: %s, data: %s\n", err, method, url, data)
+			return
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != 200 {
+			err = fmt.Errorf("Method:%s url:%s data: %s status:%d\n%s\n", method, url, data, resp.StatusCode, body)
+			return
+		}
+		// fmt.Printf("%s --> %d uuids\n", slug, len(slugUUIDs))
+		if mMtx != nil {
+			mMtx.Lock()
+			defer mMtx.Unlock()
+		}
+		for _, uuid := range slugUUIDs {
+			_, ok := m[uuid]
+			if !ok {
+				m[uuid] = make(map[string]struct{})
+			}
+			m[uuid][slug] = struct{}{}
+		}
+		return
+	}
+	fmt.Printf("Using %d threads to process %d CNCF projects and %d UUIDs\n", thrN, len(slugs), len(uuids))
+	if thrN > 1 {
+		ch := make(chan error)
+		nThreads := 0
+		for _, slug := range slugs {
+			for _, uuidsCond := range uuidsConds {
+				pattern := slug2pattern[slug]
+				go func(ch chan error, es, slug, pattern, uuidsCond string) {
+					_ = processSlug(ch, es, slug, pattern, uuidsCond)
+				}(ch, es, slug, pattern, uuidsCond)
+				nThreads++
+				if nThreads == thrN {
+					err := <-ch
+					if err != nil {
+						fmt.Printf("%+v\n", err)
+					}
+					nThreads--
+				}
+			}
+		}
+		for nThreads > 0 {
+			<-ch
+			nThreads--
+		}
+	} else {
+		for _, slug := range slugs {
+			for _, uuidsCond := range uuidsConds {
+				err := processSlug(nil, es, slug, slug2pattern[slug], uuidsCond)
+				if err != nil {
+					fmt.Printf("%+v\n", err)
+				}
+			}
+		}
+	}
+	return
 }
 
 // mapCompanyName: maps company name to possibly new company name (when one was acquired by the another)
@@ -192,22 +452,28 @@ func addOrganization(db *sql.DB, company string) int {
 	return id
 }
 
-func addEnrollment(db *sql.DB, uuid string, companyID int, from, to time.Time) bool {
-	rows, err := db.Query("select 1 from enrollments where uuid = ? and start = ? and end = ? and organization_id = ? and project_slug is null", uuid, from, to, companyID)
-	fatalOnError(err)
-	var dummy int
-	for rows.Next() {
-		fatalOnError(rows.Scan(&dummy))
-	}
-	fatalOnError(rows.Err())
-	fatalOnError(rows.Close())
-	if dummy == 1 {
+func addEnrollment(db *sql.DB, uuid string, companyID int, from, to time.Time, m map[string]map[string]struct{}) bool {
+	slugs, ok := m[uuid]
+	if !ok {
 		return false
 	}
-	_, err = db.Exec("delete from enrollments where uuid = ? and start = ? and end = ? and project_slug is null", uuid, from, to)
-	fatalOnError(err)
-	_, err = db.Exec("insert into enrollments(uuid, start, end, organization_id, project_slug) values(?, ?, ?, ?, null)", uuid, from, to, companyID)
-	fatalOnError(err)
+	for slug := range slugs {
+		rows, err := db.Query("select 1 from enrollments where uuid = ? and start = ? and end = ? and organization_id = ? and project_slug = ?", uuid, from, to, companyID, slug)
+		fatalOnError(err)
+		var dummy int
+		for rows.Next() {
+			fatalOnError(rows.Scan(&dummy))
+		}
+		fatalOnError(rows.Err())
+		fatalOnError(rows.Close())
+		if dummy == 1 {
+			return false
+		}
+		_, err = db.Exec("delete from enrollments where uuid = ? and start = ? and end = ? and project_slug = ?", uuid, from, to, slug)
+		fatalOnError(err)
+		_, err = db.Exec("insert into enrollments(uuid, start, end, organization_id, project_slug) values(?, ?, ?, ?, ?)", uuid, from, to, companyID, slug)
+		fatalOnError(err)
+	}
 	return true
 }
 
@@ -259,7 +525,7 @@ func updateIdentities(db *sql.DB, uuids map[string]struct{}) int64 {
 	return allUpdated
 }
 
-func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions) {
+func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, esURL string, cncfSlugs []string) {
 	// Process acquisitions
 	fmt.Printf("Acquisitions: %+v\n", acqs.Acquisitions)
 	var (
@@ -303,7 +569,7 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions) {
 
 	// Eventually clean affiliations data
 	if os.Getenv("SH_CLEANUP") != "" {
-		_, err := db.Exec("delete from enrollments where project_slug is null")
+		_, err := db.Exec("delete from enrollments where project_slug like 'cncf/%'")
 		fatalOnError(err)
 		_, err = db.Exec("delete from organizations")
 		fatalOnError(err)
@@ -371,6 +637,11 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions) {
 	fatalOnError(rows.Close())
 
 	// Process all JSON entries
+	noProfileUpdate := false
+	noProfileUpdateS := os.Getenv("NO_PROFILE_UPDATE")
+	if noProfileUpdateS != "" {
+		noProfileUpdate = true
+	}
 	defaultStartDate := time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC)
 	defaultEndDate := time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)
 	companies := make(stringSet)
@@ -379,6 +650,7 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions) {
 	allAffs := 0
 	updatedProfiles := make(map[string]struct{})
 	notUpdatedProfiles := make(map[string]struct{})
+	allUUIDs := make(map[string]struct{})
 	for _, user := range *users {
 		// Email decode ! --> @
 		user.Email = strings.ToLower(emailDecode(user.Email))
@@ -396,7 +668,11 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions) {
 		}
 		if len(uuids) > 0 {
 			for uuid := range uuids {
-				updated := updateProfile(db, uuid, &user, countryCodes)
+				allUUIDs[uuid] = struct{}{}
+				updated := false
+				if !noProfileUpdate {
+					updated = updateProfile(db, uuid, &user, countryCodes)
+				}
 				if updated {
 					updatedProfiles[uuid] = struct{}{}
 				} else {
@@ -440,6 +716,34 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions) {
 	}
 	// fmt.Printf("affList: %+v\ncompanies: %+v\n", affList, companies)
 	// fmt.Printf("oname2id: %+v\ncompanies: %+v\n", oname2id, companies)
+	fmt.Printf("All UUIDs: %d\n", len(allUUIDs))
+	uuids2slugs := getUUIDsProjects(esURL, cncfSlugs, allUUIDs)
+	counts := make(map[int]int)
+	for _, slugs := range uuids2slugs {
+		count := len(slugs)
+		cnt, ok := counts[count]
+		if !ok {
+			counts[count] = 1
+		} else {
+			counts[count] = cnt + 1
+		}
+	}
+	sInfo := []string{}
+	for count, n := range counts {
+		sInfo = append(sInfo, fmt.Sprintf("%03d projects: %d uuids\n", count, n))
+	}
+	sort.Strings(sInfo)
+	for _, info := range sInfo {
+		fmt.Print(info)
+	}
+	miss := 0
+	for uuid := range allUUIDs {
+		_, ok := uuids2slugs[uuid]
+		if !ok {
+			miss++
+		}
+	}
+	fmt.Printf("%d uuids not found\n", miss)
 
 	// Add companies
 	for company := range companies {
@@ -467,7 +771,7 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions) {
 		if !ok {
 			fatalf("company not found: " + aff.company)
 		}
-		updated := addEnrollment(db, uuid, companyID, aff.from, aff.to)
+		updated := addEnrollment(db, uuid, companyID, aff.from, aff.to, uuids2slugs)
 		if updated {
 			updatedEnrollments[uuid] = struct{}{}
 		} else {
@@ -637,6 +941,35 @@ func getAcquisitionsYAMLBody() []byte {
 	return data
 }
 
+func getCNCFSlugs(repoURL string) (slugs []string, err error) {
+	cmd := []string{"git", "clone", "--single-branch", "--branch", "prod", repoURL}
+	env := map[string]string{"GIT_TERMINAL_PROMPT": "0"}
+	_, _ = execCommand(cmd, env)
+	defer func() {
+		_, _ = execCommand([]string{"rm", "-rf", "dev-analytics-api"}, nil)
+	}()
+	var fns string
+	fns, _ = execCommand([]string{"ls", "./dev-analytics-api/app/services/lf/bootstrap/fixtures/cncf"}, nil)
+	fna := strings.Split(fns, "\n")
+	for _, fn := range fna {
+		fn = strings.TrimSpace(fn)
+		if fn == "" {
+			continue
+		}
+		fn = "./dev-analytics-api/app/services/lf/bootstrap/fixtures/cncf/" + fn
+		var data []byte
+		data, err = ioutil.ReadFile(fn)
+		fatalOnError(err)
+		var fixture fixtureData
+		err = yaml.Unmarshal(data, &fixture)
+		if fixture.Native.Slug == "" {
+			fatalf("fixture %+v has no slug", fixture)
+		}
+		slugs = append(slugs, fixture.Native.Slug)
+	}
+	return
+}
+
 func main() {
 	// Connect to MariaDB
 	dsn := getConnectString()
@@ -645,6 +978,21 @@ func main() {
 	defer func() { fatalOnError(db.Close()) }()
 	_, err = db.Exec("set @origin = ?", cOrigin)
 	fatalOnError(err)
+
+	esURL := os.Getenv("ES_URL")
+	if esURL == "" {
+		fatalf("you need to specify ES_URL env variable")
+	}
+	repoAccess := os.Getenv("REPO_ACCESS")
+	if repoAccess == "" {
+		fatalf("you need to specify REPO_ACCESS env variable")
+	}
+
+	// Get all CNCF projects slugs from DA-api repo
+	var cncfSlugs []string
+	cncfSlugs, err = getCNCFSlugs(repoAccess)
+	fatalOnError(err)
+	fmt.Printf("Found %d CNCF projects\n", len(cncfSlugs))
 
 	// Parse github_users.json
 	var users gitHubUsers
@@ -666,5 +1014,5 @@ func main() {
 		}
 	}()
 	// Import affiliations
-	importAffs(db, &users, &acqs)
+	importAffs(db, &users, &acqs, esURL, cncfSlugs)
 }
