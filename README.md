@@ -57,6 +57,8 @@ Scripts (most require setting docker username via something like this: `docker l
 # Running locally
 
 - Replace env with `prod` or `test` or `local`: `./json2hat.sh env`.
+- Pass `ONLY_GITHUB=1` if you want to match username only for git and GitHub source.
+- Clear `NO_PROFILE_UPDATE` env if you want import to be able to update country and other profile data.
 
 
 # Company names mapping
