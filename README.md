@@ -54,6 +54,12 @@ Scripts (most require setting docker username via something like this: `docker l
 - `docker/docker_remove.sh` - removes generated `json2hat` docker image.
 - `docker/docker_cleanup.sh` - removes generated `json2hat` docker image and executes `docker system prune`.
 
-# Running locally:
+# Running locally
 
 - Replace env with `prod` or `test` or `local`: `./json2hat.sh env`.
+
+
+# Company names mapping
+
+You should call DA affiliations API `map_org_names` after a successfull CNCF affiliations data import.
+
