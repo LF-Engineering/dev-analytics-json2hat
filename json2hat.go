@@ -757,6 +757,7 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, esURL str
 			oname2id[lCompany] = id
 		}
 	}
+	fmt.Printf("Processed %d companies\n", len(companies))
 
 	// Add enrollments
 	updatedEnrollments := make(map[string]struct{})
@@ -778,6 +779,7 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, esURL str
 			notUpdatedEnrollments[uuid] = struct{}{}
 		}
 	}
+	fmt.Printf("Processed %d affiliations\n", len(affList))
 
 	// Gather uuids updated and update their 'last_modified' date on 'identities' table
 	updatedUuids := make(map[string]struct{})
