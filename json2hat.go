@@ -427,6 +427,37 @@ func updateProfile(db *sql.DB, uuid string, user *gitHubUser, countryCodes map[s
 	return false
 }
 
+func updateBots(db *sql.DB) {
+	query := "update profiles set is_bot = 1 " +
+		"where uuid in (select distinct uuid from identities where (" +
+		"username like 'cf-buildpacks-eng' or username like 'bosh-ci-push-pull' or username like 'gprasath' or " +
+		"username like 'zephyr-github' or username like 'zephyrbot' or username like 'strimzi-ci' or " +
+		"username like 'athenabot' or username like 'k8s-reviewable' or username like 'codecov-io' or " +
+		"username like 'grpc-testing' or username like 'k8s-teamcity-mesosphere' or username like 'angular-builds' or " +
+		"username like 'devstats-sync' or username like 'googlebot' or username like 'hibernate-ci' or " +
+		"username like 'coveralls' or username like 'rktbot' or username like 'coreosbot' or username like 'web-flow' or " +
+		"username like 'prometheus-roobot' or username like 'cncf-bot' or username like 'kernelprbot' or " +
+		"username like 'istio-testing' or username like 'spinnakerbot' or username like 'pikbot' or " +
+		"username like 'spinnaker-release' or username like 'golangcibot' or username like 'opencontrail-ci-admin' or " +
+		"username like 'titanium-octobot' or username like 'asfgit' or username like 'appveyorbot' or " +
+		"username like 'cadvisorjenkinsbot' or username like 'gitcoinbot' or username like 'katacontainersbot' or " +
+		"username like 'prombot' or username like 'prowbot' or username like 'travis%bot' or username like 'k8s-%' or " +
+		"username like '%-bot' or username like '%-robot' or username like 'bot-%' or username like 'robot-%' or " +
+		"username like '%[bot]%' or username like '%[robot]%' or username like '%-jenkins' or username like 'jenkins-%' or " +
+		"username like '%-ci%bot' or username like '%-testing' or username like 'codecov-%' or username like '%clabot%' or " +
+		"username like '%cla-bot%' or username like '%-gerrit' or username like '%-bot-%' or " +
+		"username like '%envoy-filter-example%' or username like '%cibot' or username like '%-ci') " +
+		"and source like 'git%')"
+	res, err := db.Exec(query)
+	if err != nil {
+		fmt.Printf("%s\n", query)
+	}
+	fatalOnError(err)
+	count, err := res.RowsAffected()
+	fatalOnError(err)
+	fmt.Printf("Set %d profiles as bots\n", count)
+}
+
 func addOrganization(db *sql.DB, company string) int {
 	_, err := db.Exec("insert into organizations(name) values(?)", company)
 	if err != nil {
@@ -831,6 +862,7 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, esURL str
 		}
 		fmt.Printf("Used mapping '%s' --> '%s'\n", company, data[0])
 	}
+	updateBots(db)
 	fmt.Printf("All finished OK\n")
 }
 
