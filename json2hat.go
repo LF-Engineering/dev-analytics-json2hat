@@ -823,7 +823,8 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, esURL str
 	// Add enrollments
 	updatedEnrollments := make(map[string]struct{})
 	notUpdatedEnrollments := make(map[string]struct{})
-	for _, aff := range affList {
+	nAffs := len(affList)
+	for i, aff := range affList {
 		uuid := aff.uuid
 		if aff.company == "" {
 			continue
@@ -838,6 +839,9 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, esURL str
 			updatedEnrollments[uuid] = struct{}{}
 		} else {
 			notUpdatedEnrollments[uuid] = struct{}{}
+		}
+		if i > 0 && i%1000 == 0 {
+			fmt.Printf("Processed %d/%d enrollments\n", i, nAffs)
 		}
 	}
 	fmt.Printf("Processed %d affiliations\n", len(affList))
@@ -886,7 +890,7 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, esURL str
 		fmt.Printf("Used mapping '%s' --> '%s'\n", company, data[0])
 	}
 	updateBots(db)
-	fmt.Printf("All finished OK\n")
+	fmt.Printf("All finished OK, you should run map_org_names DA affiliation API now\n")
 }
 
 // getConnectString - get MariaDB SH (Sorting Hat) database DSN
