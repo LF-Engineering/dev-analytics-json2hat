@@ -499,20 +499,26 @@ func addOrganization(db *sql.DB, company string) int {
 	return id
 }
 
-func addEnrollment(db *sql.DB, uuid string, companyID int, from, to time.Time, m map[string]map[string]struct{}) bool {
+func addEnrollment(db *sql.DB, uuid string, companyID int, from, to time.Time, m map[string]map[string]struct{}, replace bool) bool {
 	slugs, ok := m[uuid]
 	if !ok {
 		return false
 	}
 	for slug := range slugs {
-		rows, err := db.Query("select 1 from enrollments where uuid = ? and start = ? and end = ? and organization_id = ? and project_slug = ?", uuid, from, to, companyID, slug)
-		fatalOnError(err)
-		var dummy int
-		for rows.Next() {
-			fatalOnError(rows.Scan(&dummy))
+		var (
+			dummy int
+			err   error
+		)
+		if !replace {
+			var rows *sql.Rows
+			rows, err = db.Query("select 1 from enrollments where uuid = ? and start = ? and end = ? and organization_id = ? and project_slug = ?", uuid, from, to, companyID, slug)
+			fatalOnError(err)
+			for rows.Next() {
+				fatalOnError(rows.Scan(&dummy))
+			}
+			fatalOnError(rows.Err())
+			fatalOnError(rows.Close())
 		}
-		fatalOnError(rows.Err())
-		fatalOnError(rows.Close())
 		if dummy == 1 {
 			return false
 		}
@@ -583,6 +589,10 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, esURL str
 	onlyGithub := false
 	if os.Getenv("ONLY_GITHUB") != "" {
 		onlyGithub = true
+	}
+	replace := false
+	if os.Getenv("REPLACE") != "" {
+		replace = true
 	}
 	var re *regexp.Regexp
 	acqMap = make(map[*regexp.Regexp]string)
@@ -823,7 +833,7 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, esURL str
 		if !ok {
 			fatalf("company not found: " + aff.company)
 		}
-		updated := addEnrollment(db, uuid, companyID, aff.from, aff.to, uuids2slugs)
+		updated := addEnrollment(db, uuid, companyID, aff.from, aff.to, uuids2slugs, replace)
 		if updated {
 			updatedEnrollments[uuid] = struct{}{}
 		} else {

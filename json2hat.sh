@@ -11,4 +11,5 @@ export SH_DSN="`cat ./secrets/SH_DSN.${env}.secret`"
 export SYNC_URL="`cat ./secrets/SYNC_URL.${env}.secret`"
 export REPO_ACCESS="`cat ./secrets/REPO_ACCESS.secret`"
 export NO_PROFILE_UPDATE=1
+export REPLACE=1
 ./json2hat
