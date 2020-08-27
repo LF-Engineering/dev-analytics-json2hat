@@ -864,9 +864,15 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 
 	// Add companies
 	cache2nd := make(map[string]int)
+	ci := 0
+	nComps := len(companies)
 	for company := range companies {
+		ci++
 		if company == "" {
 			continue
+		}
+		if ci > 0 && ci%200 == 0 {
+			fmt.Printf("Processed %d/%d companies\n", ci, nComps)
 		}
 		lCompany := strings.ToLower(company)
 		id, ok := oname2id[lCompany]
