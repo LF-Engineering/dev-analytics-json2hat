@@ -625,9 +625,13 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 		comMap map[string][2]string
 		stat   map[string][2]int
 	)
-	onlyGithub := false
-	if os.Getenv("ONLY_GITHUB") != "" {
-		onlyGithub = true
+	onlyGGHUsername := false
+	if os.Getenv("ONLY_GGH_USERNAME") != "" {
+		onlyGGHUsername = true
+	}
+	onlyGGHName := false
+	if os.Getenv("ONLY_GGH_USER") != "" {
+		onlyGGHName = true
 	}
 	replace := false
 	if os.Getenv("REPLACE") != "" {
@@ -719,7 +723,7 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 			}
 			email2uuid[email][uuid] = struct{}{}
 		}
-		if pusername != nil && (!onlyGithub || source == cGit || source == cGitHub) {
+		if pusername != nil && (!onlyGGHUsername || source == cGit || source == cGitHub) {
 			username = *pusername
 			_, ok := username2uuid[username]
 			if !ok {
@@ -727,7 +731,7 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 			}
 			username2uuid[username][uuid] = struct{}{}
 		}
-		if pname != nil && (!onlyGithub || source == cGit || source == cGitHub) {
+		if pname != nil && (!onlyGGHName || source == cGit || source == cGitHub) {
 			name = *pname
 			_, ok := name2uuid[name]
 			if !ok {
