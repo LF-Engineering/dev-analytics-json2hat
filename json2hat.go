@@ -617,7 +617,9 @@ func updateIdentities(db *sql.DB, uuids map[string]struct{}) int64 {
 
 func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNames *allMappings, esURL string, cncfSlugs []string) {
 	// Process acquisitions
-	fmt.Printf("Acquisitions: %+v\n", acqs.Acquisitions)
+	// fmt.Printf("Acquisitions: %+v\n", acqs.Acquisitions)
+	fmt.Printf("Acquisitions: %d\n", len(acqs.Acquisitions))
+	fmt.Printf("Mappings: %d\n", len(mapOrgNames.Mappings))
 	var (
 		acqMap map[*regexp.Regexp]string
 		comMap map[string][2]string
@@ -691,6 +693,7 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 	}
 
 	// Fetch existing identities
+	fmt.Printf("Reading existing identities...\n")
 	rows, err := db.Query("select uuid, email, username, name, source from identities")
 	fatalOnError(err)
 	var (
@@ -743,6 +746,7 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 	}
 
 	// Fetch current organizations
+	fmt.Printf("Reading existing organizations...\n")
 	rows, err = db.Query("select id, name from organizations")
 	fatalOnError(err)
 	var id int
@@ -755,6 +759,7 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 	fatalOnError(rows.Close())
 
 	// Fetch known country codes
+	fmt.Printf("Reading countries...\n")
 	countryCodes := make(map[string]struct{})
 	rows, err = db.Query("select code from countries")
 	fatalOnError(err)
@@ -781,7 +786,12 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 	updatedProfiles := make(map[string]struct{})
 	notUpdatedProfiles := make(map[string]struct{})
 	allUUIDs := make(map[string]struct{})
-	for _, user := range *users {
+	nUsr := len(*users)
+	fmt.Printf("Processing JSON...\n")
+	for ui, user := range *users {
+		if ui > 0 && ui%5000 == 0 {
+			fmt.Printf("Processing JSON %d/%d\n", ui, nUsr)
+		}
 		// Email decode ! --> @
 		user.Email = strings.ToLower(emailDecode(user.Email))
 		email := user.Email
