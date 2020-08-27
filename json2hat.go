@@ -789,7 +789,7 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 	nUsr := len(*users)
 	fmt.Printf("Processing JSON...\n")
 	for ui, user := range *users {
-		if ui > 0 && ui%5000 == 0 {
+		if ui > 0 && ui%1000 == 0 {
 			fmt.Printf("Processing JSON %d/%d\n", ui, nUsr)
 		}
 		// Email decode ! --> @
