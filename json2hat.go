@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"runtime/debug"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -24,6 +25,8 @@ import (
 )
 
 const cOrigin = "json2hat"
+const cGit = "git"
+const cGitHub = "github"
 
 // Native - keeps fixture slug
 type native struct {
@@ -632,6 +635,13 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 	if os.Getenv("DRY_RUN") != "" {
 		dry = true
 	}
+	nameMatch := 0
+	sNameMatch := os.Getenv("NAME_MATCH")
+	if sNameMatch != "" {
+		var e error
+		nameMatch, e = strconv.Atoi(sNameMatch)
+		fatalOnError(e)
+	}
 	var re *regexp.Regexp
 	acqMap = make(map[*regexp.Regexp]string)
 	comMap = make(map[string][2]string)
@@ -681,20 +691,23 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 	}
 
 	// Fetch existing identities
-	rows, err := db.Query("select uuid, email, username, source from identities")
+	rows, err := db.Query("select uuid, email, username, name, source from identities")
 	fatalOnError(err)
 	var (
 		uuid      string
 		email     string
+		name      string
 		username  string
 		pemail    *string
 		pusername *string
+		pname     *string
 		source    string
 	)
 	email2uuid := make(map[string]map[string]struct{})
 	username2uuid := make(map[string]map[string]struct{})
+	name2uuid := make(map[string]map[string]struct{})
 	for rows.Next() {
-		fatalOnError(rows.Scan(&uuid, &pemail, &pusername, &source))
+		fatalOnError(rows.Scan(&uuid, &pemail, &pusername, &pname, &source))
 		if pemail != nil {
 			email = *pemail
 			_, ok := email2uuid[email]
@@ -703,13 +716,21 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 			}
 			email2uuid[email][uuid] = struct{}{}
 		}
-		if pusername != nil && (!onlyGithub || source == "git" || source == "github") {
+		if pusername != nil && (!onlyGithub || source == cGit || source == cGitHub) {
 			username = *pusername
 			_, ok := username2uuid[username]
 			if !ok {
 				username2uuid[username] = make(map[string]struct{})
 			}
 			username2uuid[username][uuid] = struct{}{}
+		}
+		if pname != nil && (!onlyGithub || source == cGit || source == cGitHub) {
+			name = *pname
+			_, ok := name2uuid[name]
+			if !ok {
+				name2uuid[name] = make(map[string]struct{})
+			}
+			name2uuid[name][uuid] = struct{}{}
 		}
 	}
 	fatalOnError(rows.Err())
@@ -724,7 +745,6 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 	// Fetch current organizations
 	rows, err = db.Query("select id, name from organizations")
 	fatalOnError(err)
-	var name string
 	var id int
 	oname2id := make(map[string]int)
 	for rows.Next() {
@@ -766,6 +786,7 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 		user.Email = strings.ToLower(emailDecode(user.Email))
 		email := user.Email
 		login := user.Login
+		name := user.Name
 		// Update profiles
 		uuids := make(map[string]struct{})
 		uuida, ok := email2uuid[email]
@@ -780,6 +801,15 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 		if ok {
 			for uuid := range uuida {
 				uuids[uuid] = struct{}{}
+			}
+		}
+		if nameMatch > 0 {
+			uuida, ok = name2uuid[name]
+			// fmt.Printf("name: %s --> %v/%v\n", name, uuida, ok)
+			if ok && (nameMatch > 1 || (nameMatch == 1 && len(uuida) == 1)) {
+				for uuid := range uuida {
+					uuids[uuid] = struct{}{}
+				}
 			}
 		}
 		if len(uuids) > 0 {

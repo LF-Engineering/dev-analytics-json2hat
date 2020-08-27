@@ -23,4 +23,6 @@ export REPLACE=1
 export ONLY_GITHUB=1
 # export DRY_RUN=1
 # export SKIP_BOTS=1
+# export NAME_MATCH=0|1|2
+export NAME_MATCH=1
 ./json2hat
