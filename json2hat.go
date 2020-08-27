@@ -58,10 +58,15 @@ type affData struct {
 	to      time.Time
 }
 
-// AllAcquisitions contain all company acquisitions data
+// allAcquisitions contain all company acquisitions data
 // Acquisition contains acquired company name regular expression and new company name for it.
 type allAcquisitions struct {
 	Acquisitions [][2]string `yaml:"acquisitions"`
+}
+
+// allMappings contain all organization name mappings
+type allMappings struct {
+	Mappings [][2]string `yaml:"mappings"`
 }
 
 // stringSet - set of strings
@@ -471,7 +476,35 @@ func updateBots(db *sql.DB) {
 	// from identities i, profiles p where i.uuid = p.uuid and i.uuid in (select uuid from profiles where name in (...));
 }
 
-func addOrganization(db *sql.DB, company string) int {
+func addOrganization(db *sql.DB, companyName, lCompanyName string, mapOrgNames *allMappings, oname2id, cache map[string]int) int {
+	company := companyName
+	companyID, ok := cache[lCompanyName]
+	if !ok {
+		for _, mp := range mapOrgNames.Mappings {
+			re := strings.Replace(mp[0], "\\\\", "\\", -1)
+			to := mp[1]
+			rows, err := db.Query("select ? regexp ?", lCompanyName, re)
+			fatalOnError(err)
+			match := 0
+			for rows.Next() {
+				fatalOnError(rows.Scan(&match))
+				break
+			}
+			fatalOnError(rows.Err())
+			fatalOnError(rows.Close())
+			if match == 1 {
+				id, ok2 := oname2id[strings.ToLower(to)]
+				if ok2 {
+					cache[lCompanyName] = id
+					return id
+				}
+				company = to
+				break
+			}
+		}
+	} else {
+		return companyID
+	}
 	_, err := db.Exec("insert into organizations(name) values(?)", company)
 	if err != nil {
 		if strings.Contains(err.Error(), "Error 1062") {
@@ -496,6 +529,7 @@ func addOrganization(db *sql.DB, company string) int {
 	}
 	fatalOnError(rows.Err())
 	fatalOnError(rows.Close())
+	cache[lCompanyName] = id
 	return id
 }
 
@@ -578,7 +612,7 @@ func updateIdentities(db *sql.DB, uuids map[string]struct{}) int64 {
 	return allUpdated
 }
 
-func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, esURL string, cncfSlugs []string) {
+func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNames *allMappings, esURL string, cncfSlugs []string) {
 	// Process acquisitions
 	fmt.Printf("Acquisitions: %+v\n", acqs.Acquisitions)
 	var (
@@ -593,6 +627,10 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, esURL str
 	replace := false
 	if os.Getenv("REPLACE") != "" {
 		replace = true
+	}
+	dry := false
+	if os.Getenv("DRY_RUN") != "" {
+		dry = true
 	}
 	var re *regexp.Regexp
 	acqMap = make(map[*regexp.Regexp]string)
@@ -628,6 +666,11 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, esURL str
 		}
 	}
 
+	if dry {
+		fmt.Printf("Exiting due to dry-run mode\n")
+		return
+	}
+
 	// Eventually clean affiliations data
 	if os.Getenv("SH_CLEANUP") != "" {
 		_, err := db.Exec("delete from enrollments where project_slug like 'cncf/%'")
@@ -640,27 +683,33 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, esURL str
 	// Fetch existing identities
 	rows, err := db.Query("select uuid, email, username, source from identities")
 	fatalOnError(err)
-	var uuid string
-	var email string
-	var username string
-	var pemail *string
-	var pusername *string
-	var source string
-	email2uuid := make(map[string]string)
-	username2uuid := make(map[string]string)
+	var (
+		uuid      string
+		email     string
+		username  string
+		pemail    *string
+		pusername *string
+		source    string
+	)
+	email2uuid := make(map[string]map[string]struct{})
+	username2uuid := make(map[string]map[string]struct{})
 	for rows.Next() {
 		fatalOnError(rows.Scan(&uuid, &pemail, &pusername, &source))
-		email = ""
-		username = ""
 		if pemail != nil {
 			email = *pemail
+			_, ok := email2uuid[email]
+			if !ok {
+				email2uuid[email] = make(map[string]struct{})
+			}
+			email2uuid[email][uuid] = struct{}{}
 		}
-		if pusername != nil {
+		if pusername != nil && (!onlyGithub || source == "git" || source == "github") {
 			username = *pusername
-		}
-		email2uuid[email] = uuid
-		if !onlyGithub || source == "git" || source == "github" {
-			username2uuid[username] = uuid
+			_, ok := username2uuid[username]
+			if !ok {
+				username2uuid[username] = make(map[string]struct{})
+			}
+			username2uuid[username][uuid] = struct{}{}
 		}
 	}
 	fatalOnError(rows.Err())
@@ -719,15 +768,22 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, esURL str
 		login := user.Login
 		// Update profiles
 		uuids := make(map[string]struct{})
-		uuid, ok := email2uuid[email]
+		uuida, ok := email2uuid[email]
+		// fmt.Printf("email: %s --> %v/%v\n", email, uuida, ok)
 		if ok {
-			uuids[uuid] = struct{}{}
+			for uuid := range uuida {
+				uuids[uuid] = struct{}{}
+			}
 		}
-		uuid, ok = username2uuid[login]
+		uuida, ok = username2uuid[login]
+		// fmt.Printf("username: %s --> %v/%v\n", login, uuida, ok)
 		if ok {
-			uuids[uuid] = struct{}{}
+			for uuid := range uuida {
+				uuids[uuid] = struct{}{}
+			}
 		}
 		if len(uuids) > 0 {
+			// fmt.Printf("Final uuids: %v\n", uuids)
 			for uuid := range uuids {
 				allUUIDs[uuid] = struct{}{}
 				updated := false
@@ -807,6 +863,7 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, esURL str
 	fmt.Printf("%d uuids not found\n", miss)
 
 	// Add companies
+	cache2nd := make(map[string]int)
 	for company := range companies {
 		if company == "" {
 			continue
@@ -814,7 +871,7 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, esURL str
 		lCompany := strings.ToLower(company)
 		id, ok := oname2id[lCompany]
 		if !ok {
-			id = addOrganization(db, company)
+			id = addOrganization(db, company, lCompany, mapOrgNames, oname2id, cache2nd)
 			oname2id[lCompany] = id
 		}
 	}
@@ -889,8 +946,13 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, esURL str
 		}
 		fmt.Printf("Used mapping '%s' --> '%s'\n", company, data[0])
 	}
-	updateBots(db)
-	fmt.Printf("All finished OK, you should run map_org_names DA affiliation API now\n")
+	skipBots := false
+	if os.Getenv("SKIP_BOTS") != "" {
+		skipBots = true
+	}
+	if !skipBots {
+		updateBots(db)
+	}
 }
 
 // getConnectString - get MariaDB SH (Sorting Hat) database DSN
@@ -1009,6 +1071,18 @@ func getAcquisitionsYAMLBody() []byte {
 	return data
 }
 
+// getMapOrgNamesYAMLBody - get map organization names YAML body
+func getMapOrgNamesYAMLBody() []byte {
+	yamlRemotePath := "https://github.com/LF-Engineering/dev-analytics-affiliation/raw/master/map_org_names.yaml"
+	response, err := http.Get(yamlRemotePath)
+	fatalOnError(err)
+	defer func() { _ = response.Body.Close() }()
+	data, err := ioutil.ReadAll(response.Body)
+	fatalOnError(err)
+	fmt.Printf("Read %d bytes remote YAML data from %s\n", len(data), yamlRemotePath)
+	return data
+}
+
 func getCNCFSlugs(repoURL string) (slugs []string, err error) {
 	cmd := []string{"git", "clone", "--single-branch", "--branch", "prod", repoURL}
 	env := map[string]string{"GIT_TERMINAL_PROMPT": "0"}
@@ -1074,6 +1148,12 @@ func main() {
 	data = getAcquisitionsYAMLBody()
 	fatalOnError(yaml.Unmarshal(data, &acqs))
 
+	// Parse DA's map_org_names.yaml
+	var mapOrgNames allMappings
+	// Read yaml data from local file falling back to remote file
+	data = getMapOrgNamesYAMLBody()
+	fatalOnError(yaml.Unmarshal(data, &mapOrgNames))
+
 	// Trigger sync event
 	defer func() {
 		e := ssawsync.Sync(cOrigin)
@@ -1082,5 +1162,5 @@ func main() {
 		}
 	}()
 	// Import affiliations
-	importAffs(db, &users, &acqs, esURL, cncfSlugs)
+	importAffs(db, &users, &acqs, &mapOrgNames, esURL, cncfSlugs)
 }

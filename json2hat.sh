@@ -5,11 +5,22 @@ then
   exit 1
 fi
 env="${1}"
-export ES_URL="`cat ./secrets/ES_URL.${env}.secret`"
-export SH_DSN="`cat ./secrets/SH_DSN.${env}.secret`"
-# export SH_DSN="`cat ./secrets/SH_DSN.local.secret`"
-export SYNC_URL="`cat ./secrets/SYNC_URL.${env}.secret`"
+if [ -z "${ES_URL}" ]
+then
+  export ES_URL="`cat ./secrets/ES_URL.${env}.secret`"
+fi
+if [ -z "${SH_DSN}" ]
+then
+  export SH_DSN="`cat ./secrets/SH_DSN.${env}.secret`"
+fi
+if [ -z "${SYNC_URL}" ]
+then
+  export SYNC_URL="`cat ./secrets/SYNC_URL.${env}.secret`"
+fi
 export REPO_ACCESS="`cat ./secrets/REPO_ACCESS.secret`"
 export NO_PROFILE_UPDATE=1
 export REPLACE=1
+export ONLY_GITHUB=1
+# export DRY_RUN=1
+# export SKIP_BOTS=1
 ./json2hat
