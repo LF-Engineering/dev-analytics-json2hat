@@ -141,7 +141,7 @@ func execCommand(cmdAndArgs []string, env map[string]string) (string, string) {
 	return stdOut.String(), stdErr.String()
 }
 
-func getUUIDsProjects(es string, slugs []string, uuids map[string]struct{}) (m map[string]map[string]struct{}) {
+func getUUIDsProjects(es string, slugs []string, uuids map[string]struct{}, dbg bool) (m map[string]map[string]struct{}) {
 	m = make(map[string]map[string]struct{})
 	fetchSize := 20000
 	termsSize := 0xffff
@@ -196,7 +196,9 @@ func getUUIDsProjects(es string, slugs []string, uuids map[string]struct{}) (m m
 				ch <- err
 			}()
 		}
-		// fmt.Printf("Processing: %s <--> %s\n", slug, pattern)
+		if dbg {
+			fmt.Printf("Processing: %s <--> %s\n", slug, pattern)
+		}
 		data := fmt.Sprintf(
 			`{"query":"select author_uuid from \"%s\" where author_uuid is not null and author_uuid != '' and `+cond+` group by author_uuid","fetch_size":%d}`,
 			jsonEscape(pattern),
@@ -539,7 +541,9 @@ func addOrganization(db *sql.DB, companyName, lCompanyName string, mapOrgNames *
 func addEnrollment(db *sql.DB, uuid string, companyID int, from, to time.Time, m map[string]map[string]struct{}, replace bool) bool {
 	slugs, ok := m[uuid]
 	if !ok {
-		return false
+		slugs = make(map[string]struct{})
+		slugs["cncf/shared"] = struct{}{}
+		// return false
 	}
 	for slug := range slugs {
 		var (
@@ -625,6 +629,10 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 		comMap map[string][2]string
 		stat   map[string][2]int
 	)
+	dbg := false
+	if os.Getenv("DBG") != "" {
+		dbg = true
+	}
 	onlyGGHUsername := false
 	if os.Getenv("ONLY_GGH_USERNAME") != "" {
 		onlyGGHUsername = true
@@ -804,14 +812,18 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 		// Update profiles
 		uuids := make(map[string]struct{})
 		uuida, ok := email2uuid[email]
-		// fmt.Printf("email: %s --> %v/%v\n", email, uuida, ok)
+		if dbg {
+			fmt.Printf("email: %s --> %v/%v\n", email, uuida, ok)
+		}
 		if ok {
 			for uuid := range uuida {
 				uuids[uuid] = struct{}{}
 			}
 		}
 		uuida, ok = username2uuid[login]
-		// fmt.Printf("username: %s --> %v/%v\n", login, uuida, ok)
+		if dbg {
+			fmt.Printf("username: %s --> %v/%v\n", login, uuida, ok)
+		}
 		if ok {
 			for uuid := range uuida {
 				uuids[uuid] = struct{}{}
@@ -819,7 +831,9 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 		}
 		if nameMatch > 0 {
 			uuida, ok = name2uuid[name]
-			// fmt.Printf("name: %s --> %v/%v\n", name, uuida, ok)
+			if dbg {
+				fmt.Printf("name: %s --> %v/%v\n", name, uuida, ok)
+			}
 			if ok && (nameMatch > 1 || (nameMatch == 1 && len(uuida) == 1)) {
 				for uuid := range uuida {
 					uuids[uuid] = struct{}{}
@@ -827,7 +841,9 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 			}
 		}
 		if len(uuids) > 0 {
-			// fmt.Printf("Final uuids: %v\n", uuids)
+			if dbg {
+				fmt.Printf("Final uuids: %v\n", uuids)
+			}
 			for uuid := range uuids {
 				allUUIDs[uuid] = struct{}{}
 				updated := false
@@ -878,7 +894,7 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 	// fmt.Printf("affList: %+v\ncompanies: %+v\n", affList, companies)
 	// fmt.Printf("oname2id: %+v\ncompanies: %+v\n", oname2id, companies)
 	fmt.Printf("All UUIDs: %d\n", len(allUUIDs))
-	uuids2slugs := getUUIDsProjects(esURL, cncfSlugs, allUUIDs)
+	uuids2slugs := getUUIDsProjects(esURL, cncfSlugs, allUUIDs, dbg)
 	counts := make(map[int]int)
 	for _, slugs := range uuids2slugs {
 		count := len(slugs)

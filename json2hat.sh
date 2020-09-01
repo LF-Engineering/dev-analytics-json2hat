@@ -1,4 +1,5 @@
 #!/bin/bash
+# clear; DBG=1 SYNC_URL='abc' SH_LOCAL_JSON_PATH=./j.json SH_DSN='sortinghat:pwd@tcp(localhost:13306)/sortinghat?charset=utf8' ./json2hat.sh prod
 if [ -z "$1" ]
 then
   echo "Please specify env as a 1st arg: prod|test|local"
