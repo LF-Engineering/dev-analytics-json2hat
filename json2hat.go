@@ -18,9 +18,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/LF-Engineering/dev-analytics-metrics/errs"
 	"github.com/LF-Engineering/ssaw/ssawsync"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -191,7 +191,7 @@ func getUUIDsProjects(es string, slugs []string, uuids map[string]struct{}, dbg 
 		if ch != nil {
 			defer func() {
 				if err != nil {
-					err = errs.Wrap(err, "processSlug: "+slug)
+					err = errors.Wrap(err, "processSlug: "+slug)
 				}
 				ch <- err
 			}()

@@ -41,6 +41,12 @@ You can set local file path via `SH_LOCAL_YAML_PATH=/path/to/companies.yaml`. De
 
 You can set remote file path via `SH_REMOTE_YAML_PATH=http://some.url.org/path/to/companies.yaml`. Default value is `https://github.com/cncf/devstats/raw/master/companies.yaml`. This file is only read when reading local json fails. If both local and remote files cannot be read program exists with a fatal error message.
 
+
+# DA company names mapping
+
+`json2hat` reads [this file](https://github.com/LF-Engineering/dev-analytics-affiliation/raw/master/map_org_names.yaml) for mappings.
+
+
 # Docker
 
 `json2hat` is packaged as a docker image [docker.io/dajohn/json2hat](https://cloud.docker.com/u/dajohn/repository/docker/dajohn/json2hat). You can use scripts from `docker/` directory to manage docker image.
@@ -61,6 +67,11 @@ Scripts (most require setting docker username via something like this: `docker l
 - Pass `ONLY_GGH_NAME=1` if you want to match name only for git and GitHub source.
 - Clear `NO_PROFILE_UPDATE` env if you want import to be able to update country and other profile data.
 - Pass `REPLACE=1` env if you want to replace any existing affiliations found (will only touch affiliations with `project_slug` like `cncf/*`).
+- Pass `DRY_RUN=1` to avoid and DB writing.
+- Pass `SKIP_BOTS=1` to avoid auto marking bots.
+- Pass `ONLY_GGH_USERNAME=1` to match usernames only for git or GitHub usernames.
+- Pass `ONLY_GGH_NAME=1` to match names only for git or GitHub names.
+- Use `NAME_MATCH=n` to specify how to match using name: 0 - do not match using name, 1 - match only when single hit, 2 - match on multiple hits, default is 1.
 
 
 # Company names mapping
