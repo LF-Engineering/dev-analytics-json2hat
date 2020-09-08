@@ -440,6 +440,7 @@ func updateProfile(db *sql.DB, uuid string, user *gitHubUser, countryCodes map[s
 func updateBots(db *sql.DB) {
 	query := "update profiles set is_bot = 1 " +
 		"where uuid in (select distinct uuid from identities where (" +
+		"username like 'ti-srebot' or " +
 		"username like 'cf-buildpacks-eng' or username like 'bosh-ci-push-pull' or username like 'gprasath' or " +
 		"username like 'zephyr-github' or username like 'zephyrbot' or username like 'strimzi-ci' or " +
 		"username like 'athenabot' or username like 'k8s-reviewable' or username like 'codecov-io' or " +
