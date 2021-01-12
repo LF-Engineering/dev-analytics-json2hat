@@ -482,14 +482,14 @@ func updateBots(db *sql.DB) {
 	// from identities i, profiles p where i.uuid = p.uuid and i.uuid in (select uuid from profiles where name in (...));
 }
 
-func addOrganization(db *sql.DB, companyName, lCompanyName string, mapOrgNames *allMappings, oname2id, cache map[string]int, missingOrgs map[string]int, orgsRO bool) int {
+func addOrganization(db *sql.DB, companyName, lCompanyName string, mapOrgNames *allMappings, oname2id, cache map[string]int, missingOrgs map[string]int, orgsRO bool, thrN int, mtx *sync.Mutex) int {
 	company := companyName
 	companyID, ok := cache[lCompanyName]
 	if !ok {
-		for _, mp := range mapOrgNames.Mappings {
+		q := "select ? regexp ?"
+		f := func(ch chan int, mp [2]string) {
 			re := strings.Replace(mp[0], "\\\\", "\\", -1)
-			to := mp[1]
-			rows, err := db.Query("select ? regexp ?", lCompanyName, re)
+			rows, err := db.Query(q, lCompanyName, re)
 			fatalOnError(err)
 			match := 0
 			for rows.Next() {
@@ -499,14 +499,49 @@ func addOrganization(db *sql.DB, companyName, lCompanyName string, mapOrgNames *
 			fatalOnError(rows.Err())
 			fatalOnError(rows.Close())
 			if match == 1 {
+				to := mp[1]
 				id, ok2 := oname2id[strings.ToLower(to)]
 				if ok2 {
+					mtx.Lock()
 					cache[lCompanyName] = id
-					return id
+					mtx.Unlock()
+					ch <- id
+					return
 				}
+				mtx.Lock()
 				company = to
-				break
+				mtx.Unlock()
+				ch <- 0
+				return
 			}
+			ch <- -1
+			return
+		}
+		ch := make(chan int)
+		nThreads := 0
+		foundID := -1
+		for _, mp := range mapOrgNames.Mappings {
+			go f(ch, mp)
+			nThreads++
+			if nThreads == thrN {
+				id := <-ch
+				nThreads--
+				if id >= 0 {
+					foundID = id
+					break
+				}
+			}
+		}
+		for nThreads > 0 {
+			id := <-ch
+			nThreads--
+			if foundID == -1 && id >= 0 {
+				foundID = id
+			}
+		}
+		if foundID > 0 {
+			cache[lCompanyName] = foundID
+			return foundID
 		}
 	} else {
 		return companyID
@@ -574,7 +609,11 @@ func addEnrollment(db *sql.DB, uuid string, companyID int, from, to time.Time, m
 		_, err = db.Exec("delete from enrollments where uuid = ? and start = ? and end = ? and project_slug = ?", uuid, from, to, slug)
 		fatalOnError(err)
 		_, err = db.Exec("insert into enrollments(uuid, start, end, organization_id, project_slug) values(?, ?, ?, ?, ?)", uuid, from, to, companyID, slug)
-		fatalOnError(err)
+		// FIXME
+		//fatalOnError(err)
+		if err != nil {
+			fmt.Printf("failed: %v, args: (%s, %v, %v, %d, %s)\n", err, uuid, from, to, companyID, slug)
+		}
 	}
 	return true
 }
@@ -932,11 +971,13 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 	fmt.Printf("%d uuids not found\n", miss)
 
 	// Add companies
+	thrN := runtime.NumCPU()
 	cache2nd := make(map[string]int)
 	missingOrgs := make(map[string]int)
 	ci := 0
 	nComps := len(companies)
 	miss = 0
+	mtx := &sync.Mutex{}
 	for company := range companies {
 		ci++
 		if company == "" {
@@ -948,8 +989,8 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 		lCompany := strings.ToLower(company)
 		id, ok := oname2id[lCompany]
 		if !ok {
-			id = addOrganization(db, company, lCompany, mapOrgNames, oname2id, cache2nd, missingOrgs, orgsRO)
-			if id < -1 {
+			id = addOrganization(db, company, lCompany, mapOrgNames, oname2id, cache2nd, missingOrgs, orgsRO, thrN, mtx)
+			if id < 0 {
 				miss++
 			}
 			oname2id[lCompany] = id
@@ -1074,7 +1115,8 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 		defer func() { _ = csvFile.Close() }()
 		writer := csv.NewWriter(csvFile)
 		fatalOnError(writer.Write([]string{"Organization Name", "Number of References"}))
-		for n, orgs := range m {
+		for _, n := range ks {
+			orgs := m[n]
 			ns := strconv.Itoa(n)
 			for _, org := range orgs {
 				err = writer.Write([]string{org, ns})
