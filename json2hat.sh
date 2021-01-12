@@ -1,5 +1,6 @@
 #!/bin/bash
 # clear; DBG=1 SH_LOCAL_JSON_PATH=./j.json SH_DSN='sortinghat:pwd@tcp(localhost:13306)/sortinghat?charset=utf8' ./json2hat.sh prod
+# clear; DBG=1 SH_DSN="`cat ./secrets/SH_DSN.local.secret`" ./json2hat.sh prod
 if [ -z "$1" ]
 then
   echo "Please specify env as a 1st arg: prod|test|local"
@@ -19,7 +20,8 @@ export DRY_RUN=''
 export SKIP_BOTS=1
 # export SKIP_BOTS=''
 export NO_PROFILE_UPDATE=1
-export REPLACE=1
+export REPLACE=''
+# export REPLACE=1
 export ONLY_GGH_USERNAME=1
 export ONLY_GGH_NAME=''
 # export NAME_MATCH=0|1|2
