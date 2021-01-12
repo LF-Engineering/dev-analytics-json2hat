@@ -72,6 +72,8 @@ Scripts (most require setting docker username via something like this: `docker l
 - Pass `ONLY_GGH_USERNAME=1` to match usernames only for git or GitHub usernames.
 - Pass `ONLY_GGH_NAME=1` to match names only for git or GitHub names.
 - Use `NAME_MATCH=n` to specify how to match using name: 0 - do not match using name, 1 - match only when single hit, 2 - match on multiple hits, default is 1.
+- Set `ORGS_RO=1` to skip adding any new organizations. It will dump a CSV file with missing org names then and won't add any enrollments to orgs that were not found (directly, lowerace or by acquisition or mapping YAMLs).
+- Set `MISSING_ORGS_CSV=filename.csv` to specify filename containing missing orgs (only when `ORGS_RO` is used), default is `missing.csv` if not specified.
 
 
 # Company names mapping

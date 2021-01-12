@@ -16,7 +16,8 @@ then
 fi
 export REPO_ACCESS="`cat ./secrets/REPO_ACCESS.secret`"
 export DRY_RUN=''
-export SKIP_BOTS=''
+export SKIP_BOTS=1
+# export SKIP_BOTS=''
 export NO_PROFILE_UPDATE=1
 export REPLACE=1
 export ONLY_GGH_USERNAME=1
@@ -24,4 +25,5 @@ export ONLY_GGH_NAME=''
 # export NAME_MATCH=0|1|2
 export NAME_MATCH=1
 export ORGS_RO=1
+export MISSING_ORGS_CSV="missing_cncf_orgs.csv"
 ./json2hat

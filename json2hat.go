@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"database/sql"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -960,6 +961,7 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 	// Add enrollments
 	updatedEnrollments := make(map[string]struct{})
 	notUpdatedEnrollments := make(map[string]struct{})
+	missingEnrollments := make(map[string]struct{})
 	nAffs := len(affList)
 	missRols := 0
 	for i, aff := range affList {
@@ -980,6 +982,7 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 				notUpdatedEnrollments[uuid] = struct{}{}
 			}
 		} else {
+			missingEnrollments[uuid] = struct{}{}
 			missRols++
 		}
 		if i > 0 && i%1000 == 0 {
@@ -1006,10 +1009,13 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 	for uuid := range notUpdatedEnrollments {
 		notUpdatedUuids[uuid] = struct{}{}
 	}
+	for uuid := range missingEnrollments {
+		notUpdatedUuids[uuid] = struct{}{}
+	}
 	updates := updateIdentities(db, updatedUuids)
 	fmt.Printf(
 		"Hits: %d, affiliations: %d, companies: %d, updated profiles: %d, updated enrollments: %d, updated uuids: %d, "+
-			"actual updates: %d, not updated profiles: %d, not updated enrollments: %d, not updated uuids: %d\n",
+			"actual updates: %d, not updated profiles: %d, not updated enrollments: %d, imissing enrollments: %d, not updated uuids: %d\n",
 		hits,
 		allAffs,
 		len(companies),
@@ -1019,6 +1025,7 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 		updates,
 		len(notUpdatedProfiles),
 		len(notUpdatedEnrollments),
+		len(missingEnrollments),
 		len(notUpdatedUuids),
 	)
 	for company, data := range stat {
@@ -1040,6 +1047,21 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 	}
 	if !skipBots {
 		updateBots(db)
+	}
+	if len(missingOrgs) > 0 {
+		fileName := os.Getenv("MISSING_ORGS_CSV")
+		if fileName == "" {
+			fileName = "missing.csv"
+		}
+		csvFile, err := os.Create(fileName)
+		fatalOnError(err)
+		defer func() { _ = csvFile.Close() }()
+		writer := csv.NewWriter(csvFile)
+		fatalOnError(writer.Write([]string{"Organization Name"}))
+		for org := range missingOrgs {
+			err = writer.Write([]string{org})
+		}
+		writer.Flush()
 	}
 }
 
