@@ -957,7 +957,7 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 	}
 	fmt.Printf("Processed %d companies\n", len(companies))
 	if orgsRO && miss > 0 {
-		fmt.Printf("missing: %d orgs\n", miss)
+		fmt.Printf("Missing: %d orgs\n", miss)
 	}
 
 	// Add enrollments
