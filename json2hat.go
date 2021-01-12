@@ -514,6 +514,7 @@ func addOrganization(db *sql.DB, companyName, lCompanyName string, mapOrgNames *
 	if orgsRO {
 		n, _ := missingOrgs[companyName]
 		missingOrgs[companyName] = n + 1
+		cache[lCompanyName] = -1
 		return -1
 	}
 	_, err := db.Exec("insert into organizations(name) values(?)", company)
