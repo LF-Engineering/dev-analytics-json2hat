@@ -1062,7 +1062,7 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 	updates := updateIdentities(db, updatedUuids)
 	fmt.Printf(
 		"Hits: %d, affiliations: %d, companies: %d, updated profiles: %d, updated enrollments: %d, updated uuids: %d, "+
-			"actual updates: %d, not updated profiles: %d, not updated enrollments: %d, imissing enrollments: %d, not updated uuids: %d\n",
+			"actual updates: %d, not updated profiles: %d, not updated enrollments: %d, missing enrollments: %d, not updated uuids: %d\n",
 		hits,
 		allAffs,
 		len(companies),
