@@ -972,6 +972,10 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 
 	// Add companies
 	thrN := runtime.NumCPU()
+	thrN /= 4
+	if thrN < 1 {
+		thrN = 1
+	}
 	cache2nd := make(map[string]int)
 	missingOrgs := make(map[string]int)
 	ci := 0
@@ -1117,6 +1121,7 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 		fatalOnError(writer.Write([]string{"Organization Name", "Number of References"}))
 		for _, n := range ks {
 			orgs := m[n]
+			sort.Strings(orgs)
 			ns := strconv.Itoa(n)
 			for _, org := range orgs {
 				err = writer.Write([]string{org, ns})
