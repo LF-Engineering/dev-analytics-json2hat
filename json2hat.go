@@ -482,7 +482,7 @@ func updateBots(db *sql.DB) {
 	// from identities i, profiles p where i.uuid = p.uuid and i.uuid in (select uuid from profiles where name in (...));
 }
 
-func addOrganization(db *sql.DB, companyName, lCompanyName string, mapOrgNames *allMappings, oname2id, cache map[string]int, missingOrgs map[string]struct{}, orgsRO bool) int {
+func addOrganization(db *sql.DB, companyName, lCompanyName string, mapOrgNames *allMappings, oname2id, cache map[string]int, missingOrgs map[string]int, orgsRO bool) int {
 	company := companyName
 	companyID, ok := cache[lCompanyName]
 	if !ok {
@@ -512,7 +512,8 @@ func addOrganization(db *sql.DB, companyName, lCompanyName string, mapOrgNames *
 		return companyID
 	}
 	if orgsRO {
-		missingOrgs[companyName] = struct{}{}
+		n, _ := missingOrgs[companyName]
+		missingOrgs[companyName] = n + 1
 		return -1
 	}
 	_, err := db.Exec("insert into organizations(name) values(?)", company)
@@ -931,7 +932,7 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 
 	// Add companies
 	cache2nd := make(map[string]int)
-	missingOrgs := make(map[string]struct{})
+	missingOrgs := make(map[string]int)
 	ci := 0
 	nComps := len(companies)
 	miss = 0
@@ -1049,6 +1050,20 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 		updateBots(db)
 	}
 	if len(missingOrgs) > 0 {
+		m := make(map[int][]string)
+		for org, n := range missingOrgs {
+			entry, ok := m[n]
+			if ok {
+				m[n] = append(entry, org)
+			} else {
+				m[n] = []string{org}
+			}
+		}
+		ks := []int{}
+		for k := range m {
+			ks = append(ks, k)
+		}
+		sort.Sort(sort.Reverse(sort.IntSlice(ks)))
 		fileName := os.Getenv("MISSING_ORGS_CSV")
 		if fileName == "" {
 			fileName = "missing.csv"
@@ -1057,9 +1072,12 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 		fatalOnError(err)
 		defer func() { _ = csvFile.Close() }()
 		writer := csv.NewWriter(csvFile)
-		fatalOnError(writer.Write([]string{"Organization Name"}))
-		for org := range missingOrgs {
-			err = writer.Write([]string{org})
+		fatalOnError(writer.Write([]string{"Organization Name", "Number of References"}))
+		for n, orgs := range m {
+			ns := strconv.Itoa(n)
+			for _, org := range orgs {
+				err = writer.Write([]string{org, ns})
+			}
 		}
 		writer.Flush()
 	}
