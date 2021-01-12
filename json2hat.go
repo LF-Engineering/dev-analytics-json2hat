@@ -18,7 +18,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/LF-Engineering/ssaw/ssawsync"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
@@ -211,25 +210,25 @@ func getUUIDsProjects(es string, slugs []string, uuids map[string]struct{}, dbg 
 		var req *http.Request
 		req, err = http.NewRequest(method, url, payloadBody)
 		if err != nil {
-			err = fmt.Errorf("new request error: %+v for %s url: %s, data: %s\n", err, method, url, data)
+			err = fmt.Errorf("new request error: %+v for %s url: %s, data: %s", err, method, url, data)
 			return
 		}
 		req.Header.Set("Content-Type", "application/json")
 		var resp *http.Response
 		resp, err = http.DefaultClient.Do(req)
 		if err != nil {
-			err = fmt.Errorf("do request error: %+v for %s url: %s, data: %s\n", err, method, url, data)
+			err = fmt.Errorf("do request error: %+v for %s url: %s, data: %s", err, method, url, data)
 			return
 		}
 		var body []byte
 		body, err = ioutil.ReadAll(resp.Body)
 		if err != nil {
-			err = fmt.Errorf("ReadAll non-ok request error: %+v for %s url: %s, data: %s\n", err, method, url, data)
+			err = fmt.Errorf("ReadAll non-ok request error: %+v for %s url: %s, data: %s", err, method, url, data)
 			return
 		}
 		_ = resp.Body.Close()
 		if resp.StatusCode != 200 {
-			err = fmt.Errorf("Method:%s url:%s data: %s status:%d\n%s\n", method, url, data, resp.StatusCode, body)
+			err = fmt.Errorf("Method:%s url:%s data: %s status:%d\n%s", method, url, data, resp.StatusCode, body)
 			return
 		}
 		type uuidsResult struct {
@@ -255,23 +254,23 @@ func getUUIDsProjects(es string, slugs []string, uuids map[string]struct{}, dbg 
 			payloadBody = bytes.NewReader(payloadBytes)
 			req, err = http.NewRequest(method, url, payloadBody)
 			if err != nil {
-				err = fmt.Errorf("new request error: %+v for %s url: %s, data: %s\n", err, method, url, data)
+				err = fmt.Errorf("new request error: %+v for %s url: %s, data: %s", err, method, url, data)
 				return
 			}
 			req.Header.Set("Content-Type", "application/json")
 			resp, err = http.DefaultClient.Do(req)
 			if err != nil {
-				err = fmt.Errorf("do request error: %+v for %s url: %s, data: %s\n", err, method, url, data)
+				err = fmt.Errorf("do request error: %+v for %s url: %s, data: %s", err, method, url, data)
 				return
 			}
 			body, err = ioutil.ReadAll(resp.Body)
 			if err != nil {
-				err = fmt.Errorf("ReadAll non-ok request error: %+v for %s url: %s, data: %s\n", err, method, url, data)
+				err = fmt.Errorf("ReadAll non-ok request error: %+v for %s url: %s, data: %s", err, method, url, data)
 				return
 			}
 			_ = resp.Body.Close()
 			if resp.StatusCode != 200 {
-				err = fmt.Errorf("Method:%s url:%s data: %s status:%d\n%s\n", method, url, data, resp.StatusCode, body)
+				err = fmt.Errorf("Method:%s url:%s data: %s status:%d\n%s", method, url, data, resp.StatusCode, body)
 				return
 			}
 			err = json.Unmarshal(body, &result)
@@ -292,23 +291,23 @@ func getUUIDsProjects(es string, slugs []string, uuids map[string]struct{}, dbg 
 		payloadBody = bytes.NewReader(payloadBytes)
 		req, err = http.NewRequest(method, url, payloadBody)
 		if err != nil {
-			err = fmt.Errorf("new request error: %+v for %s url: %s, data: %s\n", err, method, url, data)
+			err = fmt.Errorf("new request error: %+v for %s url: %s, data: %s", err, method, url, data)
 			return
 		}
 		req.Header.Set("Content-Type", "application/json")
 		resp, err = http.DefaultClient.Do(req)
 		if err != nil {
-			err = fmt.Errorf("do request error: %+v for %s url: %s, data: %s\n", err, method, url, data)
+			err = fmt.Errorf("do request error: %+v for %s url: %s, data: %s", err, method, url, data)
 			return
 		}
 		body, err = ioutil.ReadAll(resp.Body)
 		if err != nil {
-			err = fmt.Errorf("ReadAll non-ok request error: %+v for %s url: %s, data: %s\n", err, method, url, data)
+			err = fmt.Errorf("ReadAll non-ok request error: %+v for %s url: %s, data: %s", err, method, url, data)
 			return
 		}
 		_ = resp.Body.Close()
 		if resp.StatusCode != 200 {
-			err = fmt.Errorf("Method:%s url:%s data: %s status:%d\n%s\n", method, url, data, resp.StatusCode, body)
+			err = fmt.Errorf("Method:%s url:%s data: %s status:%d\n%s", method, url, data, resp.StatusCode, body)
 			return
 		}
 		// fmt.Printf("%s --> %d uuids\n", slug, len(slugUUIDs))
@@ -482,7 +481,7 @@ func updateBots(db *sql.DB) {
 	// from identities i, profiles p where i.uuid = p.uuid and i.uuid in (select uuid from profiles where name in (...));
 }
 
-func addOrganization(db *sql.DB, companyName, lCompanyName string, mapOrgNames *allMappings, oname2id, cache map[string]int) int {
+func addOrganization(db *sql.DB, companyName, lCompanyName string, mapOrgNames *allMappings, oname2id, cache map[string]int, missingOrgs map[string]struct{}, orgsRO bool) int {
 	company := companyName
 	companyID, ok := cache[lCompanyName]
 	if !ok {
@@ -510,6 +509,10 @@ func addOrganization(db *sql.DB, companyName, lCompanyName string, mapOrgNames *
 		}
 	} else {
 		return companyID
+	}
+	if orgsRO {
+		missingOrgs[companyName] = struct{}{}
+		return -1
 	}
 	_, err := db.Exec("insert into organizations(name) values(?)", company)
 	if err != nil {
@@ -543,9 +546,10 @@ func addEnrollment(db *sql.DB, uuid string, companyID int, from, to time.Time, m
 	slugs, ok := m[uuid]
 	if !ok {
 		slugs = make(map[string]struct{})
-		slugs["cncf/shared"] = struct{}{}
+		// slugs["cncf-f"] = struct{}{}
 		// return false
 	}
+	slugs["cncf-f"] = struct{}{}
 	for slug := range slugs {
 		var (
 			dummy int
@@ -698,7 +702,7 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 
 	// Eventually clean affiliations data
 	if os.Getenv("SH_CLEANUP") != "" {
-		_, err := db.Exec("delete from enrollments where project_slug like 'cncf/%'")
+		_, err := db.Exec("delete from enrollments where project_slug like 'cncf/%' or project_slug = 'cncf-f'")
 		fatalOnError(err)
 		_, err = db.Exec("delete from organizations")
 		fatalOnError(err)
@@ -790,6 +794,7 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 	if noProfileUpdateS != "" {
 		noProfileUpdate = true
 	}
+	orgsRO := os.Getenv("ORGS_RO") != ""
 	defaultStartDate := time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC)
 	defaultEndDate := time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)
 	companies := make(stringSet)
@@ -925,8 +930,10 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 
 	// Add companies
 	cache2nd := make(map[string]int)
+	missingOrgs := make(map[string]struct{})
 	ci := 0
 	nComps := len(companies)
+	miss = 0
 	for company := range companies {
 		ci++
 		if company == "" {
@@ -938,16 +945,23 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 		lCompany := strings.ToLower(company)
 		id, ok := oname2id[lCompany]
 		if !ok {
-			id = addOrganization(db, company, lCompany, mapOrgNames, oname2id, cache2nd)
+			id = addOrganization(db, company, lCompany, mapOrgNames, oname2id, cache2nd, missingOrgs, orgsRO)
+			if id < -1 {
+				miss++
+			}
 			oname2id[lCompany] = id
 		}
 	}
 	fmt.Printf("Processed %d companies\n", len(companies))
+	if orgsRO && miss > 0 {
+		fmt.Printf("missing: %d orgs\n", miss)
+	}
 
 	// Add enrollments
 	updatedEnrollments := make(map[string]struct{})
 	notUpdatedEnrollments := make(map[string]struct{})
 	nAffs := len(affList)
+	missRols := 0
 	for i, aff := range affList {
 		uuid := aff.uuid
 		if aff.company == "" {
@@ -958,17 +972,24 @@ func importAffs(db *sql.DB, users *gitHubUsers, acqs *allAcquisitions, mapOrgNam
 		if !ok {
 			fatalf("company not found: " + aff.company)
 		}
-		updated := addEnrollment(db, uuid, companyID, aff.from, aff.to, uuids2slugs, replace)
-		if updated {
-			updatedEnrollments[uuid] = struct{}{}
+		if companyID >= 0 {
+			updated := addEnrollment(db, uuid, companyID, aff.from, aff.to, uuids2slugs, replace)
+			if updated {
+				updatedEnrollments[uuid] = struct{}{}
+			} else {
+				notUpdatedEnrollments[uuid] = struct{}{}
+			}
 		} else {
-			notUpdatedEnrollments[uuid] = struct{}{}
+			missRols++
 		}
 		if i > 0 && i%1000 == 0 {
 			fmt.Printf("Processed %d/%d enrollments\n", i, nAffs)
 		}
 	}
 	fmt.Printf("Processed %d affiliations\n", len(affList))
+	if missRols > 0 {
+		fmt.Printf("Skipped %d enrollments\n", missRols)
+	}
 
 	// Gather uuids updated and update their 'last_modified' date on 'identities' table
 	updatedUuids := make(map[string]struct{})
@@ -1185,8 +1206,6 @@ func main() {
 	db, err := sql.Open("mysql", dsn)
 	fatalOnError(err)
 	defer func() { fatalOnError(db.Close()) }()
-	_, err = db.Exec("set @origin = ?", cOrigin)
-	fatalOnError(err)
 
 	esURL := os.Getenv("ES_URL")
 	if esURL == "" {
@@ -1221,13 +1240,6 @@ func main() {
 	data = getMapOrgNamesYAMLBody()
 	fatalOnError(yaml.Unmarshal(data, &mapOrgNames))
 
-	// Trigger sync event
-	defer func() {
-		e := ssawsync.Sync(cOrigin)
-		if e != nil {
-			fmt.Printf("ssaw sync error: %v\n", e)
-		}
-	}()
 	// Import affiliations
 	importAffs(db, &users, &acqs, &mapOrgNames, esURL, cncfSlugs)
 }
